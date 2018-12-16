@@ -21,8 +21,8 @@ PASSWORD = getpass("Password: ")
 reddit = praw.Reddit(client_id = CLIENT_ID,
                      client_secret = CLIENT_SECRET,
                      password=PASSWORD,
-					 user_agent=USER_AGENT,
-					 username=USERNAME)
+                     user_agent=USER_AGENT,
+                     username=USERNAME)
 
 
 # Verify that we are authenticated
