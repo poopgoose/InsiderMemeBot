@@ -4,6 +4,7 @@
 #              each of which is executed in its own thread.
 
 import praw
+from Features.ExampleFeature import ExampleFeature
 
 class InsiderMemeBot:
 
@@ -31,10 +32,11 @@ class InsiderMemeBot:
         """
         Initializes the list of Features that the bot will implement
         """
-        pass
+        self.features.append(ExampleFeature(self.reddit, self.subreddit_name))
         
     def run(self):
         """
         Runs the bot
         """
-        pass
+        for feature in self.features:
+            feature.run()
