@@ -13,7 +13,7 @@ class Feature:
         """
         self.reddit = reddit
         self.subreddit_name = subreddit_name
-         
-    
+        self.subreddit = self.reddit.subreddit(subreddit_name)
+        
     def run(self):
         pass
