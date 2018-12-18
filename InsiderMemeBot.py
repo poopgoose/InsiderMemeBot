@@ -38,5 +38,7 @@ class InsiderMemeBot:
         """
         Runs the bot
         """
-        for feature in self.features:
-            feature.run()
+        while True:                
+            for feature in self.features:
+                if feature.check_condition():
+                    feature.perform_action()

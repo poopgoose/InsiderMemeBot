@@ -1,0 +1,29 @@
+{
+   "users" :
+   [
+       "user1" :
+       {
+           "client_id" : "",
+           "user_agent" : "",
+           "username" : "",
+           "password": "",
+           "client_secret": ""
+       },
+       "user2" :
+       {
+           "client_id" : "",
+           "user_agent" : "",
+           "username" : "",
+           "password": "",
+           "client_secret": ""
+       },
+       "bot" :
+       {
+           "client_id" : "",
+           "user_agent" : "",
+           "username" : "",
+           "password": "",
+           "client_secret": ""
+       }
+   ]
+}

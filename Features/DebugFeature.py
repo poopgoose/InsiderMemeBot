@@ -2,13 +2,19 @@ from Features.Feature import Feature
 import praw
 
 
-class ExampleFeature(Feature):
+class DebugFeature(Feature):
     """
-    An example feature. Doesn't do very much.
+    A debug feature that plays through a scenario to 
+    create new posts and comments for testing other features.
     """
     
+    def __init__(self, debug_scenario):
+        self.debug_scenario
+    
     def check_condition(self):
-        return False
+        return True
+    
+    def perform_action(self):
     
     
 #    def run(self):
