@@ -1,72 +1,70 @@
 {
    "test_name" : "UNIT_TEST - RESPOND TO SUMMON",
    "description" : [
-                      "This scenario will create one post, with the following comment tree:",
-                      "",
+                      "This scenario will create one post, with the following comment tree:",                
                       "  user1: 'Calling !InsiderMemeBot'",
                       "  +- user1: 'Other text'",
                       "     +- user1: 'Calling !InsiderMemeBot!'",
                       "  user1: 'Calling !InsiderMemeBot'",
                       "  user1: 'Other text'",
-                      "  InsiderMemeBot: 'Calling !InsiderMemeBot"',
-                   ],
-                   
+                      "  InsiderMemeBot: 'Calling !InsiderMemeBot'"
+                   ],                  
     "scenario" :
     { 
-        {
-           "submission" :
-           {
-                "key" : "submission1",
-                "user" : "user1",
-                "title" : "UNIT TEST - RESPOND TO SUMMON",
-                "text" : "Test Case for InsiderMemeBot response to summons", 
-                "comments" :
-                [
-                    {
-                       "user" : "user1",
-                       "text" : "Calling !InsiderMemeBot"
-                       "key" : "comment-1",
-                       "comments" :
-                       [
-                          {
-                             "user" : "user1",
-                             "text" : "Other text",
-                             "key" : "comment-1_1",
-                             "comments" :
-                             [
+       "submission" :
+       {
+            "key" : "submission1",
+            "user" : "user1",
+            "title" : "UNIT TEST - RESPOND TO SUMMON",
+            "text" : "Test Case for InsiderMemeBot response to summons", 
+            "comments" :
+            [
+                {
+                   "user" : "user1",
+                   "text" : "Calling !InsiderMemeBot",
+                   "key" : "comment-1",
+                   "comments" :
+                   [
+                      {
+                         "user" : "user1",
+                         "text" : "Other text",
+                         "key" : "comment-1_1",
+                         "comments" :
+                         [
+                            {
                                 "user" : "user1",
                                 "text" : "Calling !InsiderMemeBot!",
                                 "key" : "comment-1_2"
-                             ]
-                          }                 
-                       ]
-                    },
-                    {
-                        "user" : "user1",
-                        "text" : "Calling !InsiderMemeBot",
-                        "key" : "comment-2"
-                    },
-                    {
-                        "user" : "user1",
-                        "text" : "Other text",
-                        "key" : "comment-3"
-                    },
-                    {
-                        "user" : "bot",
-                        "text" "Calling !InsiderMemeBot",
-                        "key" : "comment-4"
-                    }
-                ]
-            }
+                            }
+                         ]
+                      }                 
+                   ]
+                },
+                {
+                    "user" : "user1",
+                    "text" : "Calling !InsiderMemeBot",
+                    "key" : "comment-2"
+                },
+                {
+                    "user" : "user1",
+                    "text" : "Other text",
+                    "key" : "comment-3"
+                },
+                {
+                    "user" : "bot",
+                    "text" : "Calling !InsiderMemeBot",
+                    "key" : "comment-4"
+                }
+            ]
         }
     },
     "expected_results" :
-    {
+    [
       ["expect_reply", ["comment-1"]],
       ["expect_no_reply", ["comment-1_1"]],
       ["expect_reply", ["comment-1_2"]],
       ["expect_reply", ["comment-2"]],
-      ["expect_no_reply" : ["comment-3"]],
-      ["expect_no_reply" : ["comment-4"]]
-    }
+      ["expect_no_reply", ["comment-3"]],
+      ["expect_no_reply", ["comment-4"]]
+    ]
 }

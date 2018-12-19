@@ -2,6 +2,7 @@ import praw
 import json
 import os
 import sys
+from pprint import pprint
 
 class TestDriver:
     """
@@ -15,15 +16,14 @@ class TestDriver:
         @param test_case_file:   The relative path to the test_case JSON file
         """
         
-        self.read_json(test_config_file, test_case_file)
-       
-       
-    def read_json(self, test_config_file, test_case_file):
-        """
-        Initializes the data members from the two JSON files
-        """
-        print("Reading JSON!")
-        # TODO
+        with open(test_config_file, 'r') as f:   
+            self.config_dict = json.load(f)
+            
+        with open(test_case_file, 'r') as f:
+            self.test_case_dict = json.load(f)
+            
+        pprint(self.test_case_dict)
+        
 
 
 
