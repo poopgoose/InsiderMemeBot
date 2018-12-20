@@ -12,19 +12,23 @@
     [ 
          {
             "action" : "submission",
+            "id" : "submission1",
             "title" : "UNIT TEST - RESPOND TO SUMMON",
             "text" : "Test Case for InsiderMemeBot response to summons", 
             "comments" :
             [
                 {
+                   "id" : "comment-1",
                    "text" : "Calling !InsiderMemeBot",
                    "comments" :
                    [
                       {
+                         "id" : "comment-1_1",
                          "text" : "Other text",
                          "comments" :
                          [
                             {
+                                "id" : "comment-1_2",
                                 "text" : "Calling !InsiderMemeBot!"
                             }
                          ]
@@ -32,9 +36,11 @@
                    ]
                 },
                 {
+                    "id" : "comment-2",
                     "text" : "Calling !InsiderMemeBot"
                 },
                 {
+                    "id" : "comment-3",
                     "text" : "Other text"
                 }
             ]
@@ -46,7 +52,6 @@
       ["expect_no_reply", ["comment-1_1"]],
       ["expect_reply", ["comment-1_2"]],
       ["expect_reply", ["comment-2"]],
-      ["expect_no_reply", ["comment-3"]],
-      ["expect_no_reply", ["comment-4"]]
+      ["expect_no_reply", ["comment-3"]]
     ]
 }

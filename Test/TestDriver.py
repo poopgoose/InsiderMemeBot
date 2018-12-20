@@ -23,6 +23,12 @@ class TestDriver:
         with open(test_case_file, 'r') as f:
             self.test_dict = json.load(f)
             
+            
+        # Initialize the test_objects dict.
+        # This dictionary will contain all of the submissions and comments created 
+        # by the TestDriver, using the "id" field in the JSON input as the key
+        self.test_objects = {} 
+            
         # Initialize the test case data
         self.__init_test_case()
             
@@ -70,8 +76,9 @@ class TestDriver:
         """
         Execute the test case
         """
+        print("=" * 80)
         print("Executing Test Case: " + self.test_name)
-        print("Description: ")
+        print("=" * 80)
         
         # Execute each action in the scenario
         for action_dict in self.test_scenario:
@@ -82,6 +89,8 @@ class TestDriver:
             else:
                 print("Error: Unknown action type: " + str(action_type))
                 exit(1)
+                
+        print(self.test_objects)
             
     def __execute_submission(self, submission_dict):
         """
@@ -89,6 +98,7 @@ class TestDriver:
         """
         
         # Create a submission to the subreddit
+        submission_id = submission_dict["id"]
         submission_title = submission_dict["title"]
         submission_text  = submission_dict["text"]
         comment_dict = submission_dict["comments"]
@@ -97,6 +107,10 @@ class TestDriver:
         
         # Create the comment tree on the submission
         self.__create_comment_tree(comment_dict, submission)
+        
+        
+        # Add the submission to the test_object dict
+        self.test_objects[submission_id] = submission
         
         
     def __create_comment_tree(self, comment_dict, parent):
@@ -109,6 +123,7 @@ class TestDriver:
         for comment_item in comment_dict:
             # Create the comment
             comment_text = comment_item["text"]
+            comment_id   = comment_item["id"] 
             comment = parent.reply(comment_text)
             
             # If the comment has child comments, continue recursively
@@ -116,7 +131,8 @@ class TestDriver:
                 child_dict = comment_item["comments"]
                 self.__create_comment_tree(child_dict, comment)
             
-        
+            # Add the comment to the test_object dict
+            self.test_objects[comment_id] = comment
         
 
 

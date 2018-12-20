@@ -1,5 +1,6 @@
 {
    "subreddit" : "",
+   "wait_time" : 10,
    "user" :
    {
        "client_id" : "",
