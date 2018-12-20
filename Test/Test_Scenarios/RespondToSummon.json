@@ -6,58 +6,40 @@
                       "  +- user1: 'Other text'",
                       "     +- user1: 'Calling !InsiderMemeBot!'",
                       "  user1: 'Calling !InsiderMemeBot'",
-                      "  user1: 'Other text'",
-                      "  InsiderMemeBot: 'Calling !InsiderMemeBot'"
+                      "  user1: 'Other text'"
                    ],                  
     "scenario" :
-    { 
-       "submission" :
-       {
-            "key" : "submission1",
-            "user" : "user1",
+    [ 
+         {
+            "action" : "submission",
             "title" : "UNIT TEST - RESPOND TO SUMMON",
             "text" : "Test Case for InsiderMemeBot response to summons", 
             "comments" :
             [
                 {
-                   "user" : "user1",
                    "text" : "Calling !InsiderMemeBot",
-                   "key" : "comment-1",
                    "comments" :
                    [
                       {
-                         "user" : "user1",
                          "text" : "Other text",
-                         "key" : "comment-1_1",
                          "comments" :
                          [
                             {
-                                "user" : "user1",
-                                "text" : "Calling !InsiderMemeBot!",
-                                "key" : "comment-1_2"
+                                "text" : "Calling !InsiderMemeBot!"
                             }
                          ]
                       }                 
                    ]
                 },
                 {
-                    "user" : "user1",
-                    "text" : "Calling !InsiderMemeBot",
-                    "key" : "comment-2"
+                    "text" : "Calling !InsiderMemeBot"
                 },
                 {
-                    "user" : "user1",
-                    "text" : "Other text",
-                    "key" : "comment-3"
-                },
-                {
-                    "user" : "bot",
-                    "text" : "Calling !InsiderMemeBot",
-                    "key" : "comment-4"
+                    "text" : "Other text"
                 }
             ]
         }
-    },
+    ],
     "expected_results" :
     [
       ["expect_reply", ["comment-1"]],
