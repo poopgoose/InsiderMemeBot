@@ -14,13 +14,13 @@ class Feature:
         self.reddit = reddit
         self.subreddit_name = subreddit_name
         self.subreddit = self.reddit.subreddit(subreddit_name)
-        
+
     def check_condition(self):
         """
         When this function returns True, the feature will be activated
         """
         return False
-        
+
     def perform_action(self):
         """
         Performs the action of the feature
