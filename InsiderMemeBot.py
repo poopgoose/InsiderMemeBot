@@ -4,7 +4,10 @@
 #              each of which is executed in its own thread.
 
 import praw
+import time
+
 from Features.ActivityTracker import ActivityTracker
+from Features.ScoreboardFeature.ScoreboardFeature import ScoreboardFeature
 
 class InsiderMemeBot:
 
@@ -32,7 +35,8 @@ class InsiderMemeBot:
         """
         Initializes the list of Features that the bot will implement
         """
-        self.features.append(ActivityTracker(self.reddit, self.subreddit_name))
+        #self.features.append(ActivityTracker(self.reddit, self.subreddit_name))
+        self.features.append(ScoreboardFeature(self.reddit, self.subreddit_name))
         
     def run(self):
         """
@@ -42,3 +46,7 @@ class InsiderMemeBot:
             for feature in self.features:
                 if feature.check_condition():
                     feature.perform_action()
+                    
+                # Run the next loop in 1 second
+                time.sleep(1)
+
