@@ -2,6 +2,7 @@ from Features.Feature import Feature
 import praw
 import boto3
 from botocore.exceptions import ClientError
+from boto3.dynamodb.conditions import Key
 import json
 
 class ScoreboardFeature(Feature):
@@ -21,15 +22,21 @@ class ScoreboardFeature(Feature):
     def check_condition(self):
         return True
     
-    def perform_action(self):
-        print("Running ScoreboardFeature with subreddit: " + self.subreddit_name)
-        
-        # Get the latest 100 comments
+    def perform_action(self):        
+        # Get the latest 1000 comments
         for comment in self.subreddit.comments(limit=10):
-            
+            if self.is_processed_recently(comment):
+                # Ignore comments that the ScoreboardFeature has already processed
+                continue
             # Determine if the comment is an action
             if comment.body.strip() == "!new":
                 self.create_new_user(comment)
+                
+            # Mark the comment as processed so we don't look at it again
+            self.mark_comment_processed(comment)
+
+                
+        
                         
         
     ############# Process actions #############
@@ -60,6 +67,7 @@ class ScoreboardFeature(Feature):
             
             # Respond to the comment that the account was created
             comment.reply("New user registered for " + author.name + ". You have 0 points.")
+            self.mark_comment_processed(comment)
             
         
         except ClientError as e:
@@ -72,5 +80,10 @@ class ScoreboardFeature(Feature):
         Returns true if the author is already a user in the DynamoDB database.
         """
         
-        # TODO
-        return False
+        # Query the table to get any user with a user_id matching the author's id
+        response = self.user_table.query(
+            KeyConditionExpression=Key('user_id').eq(author.id))
+        num_matches = len(response['Items'])
+        
+        # If there is a match, then the author is already a user
+        return num_matches > 0
