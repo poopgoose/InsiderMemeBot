@@ -48,5 +48,5 @@ class InsiderMemeBot:
                     feature.perform_action()
                     
                 # Run the next loop in 1 second
-                time.sleep(1)
+                #time.sleep(1)
 
