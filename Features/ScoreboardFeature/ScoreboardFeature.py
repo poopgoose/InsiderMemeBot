@@ -22,9 +22,36 @@ class ScoreboardFeature(Feature):
     def check_condition(self):
         return True
     
-    def perform_action(self):        
-        # Get the latest 1000 comments
-        for comment in self.subreddit.comments(limit=10):
+    def perform_action(self):
+        self.check_submissions()
+        self.check_comments()
+    
+    def check_submissions(self):
+        # Get the 10 latest comments
+        for submission in self.subreddit.new(limit=10):
+            if self.is_old(submission):
+                continue
+            #if submission.created_utc < self.start_time:
+                # Ignore submissions that are over a day old
+                #print("Old post: " + str(submission.title))
+                #print("Submission time: " + str(submission.created_utc))
+                #print("Script start   : " + str(self.start_time))
+                #continue
+             
+            print("New submission: " + str(submission))
+            if self.is_processed_recently(submission):
+                # Ignore submissions that the ScoreboardFeature has already processed
+                continue
+                        
+               
+            print("new submission: " + str(submission))
+            # Mark the submission as processed so we don't look at it again
+            self.mark_item_processed(submission)
+
+        
+    def check_comments(self):
+        # Get the latest 100 comments
+        for comment in self.subreddit.comments(limit=100):
             if self.is_processed_recently(comment):
                 # Ignore comments that the ScoreboardFeature has already processed
                 continue
@@ -33,7 +60,7 @@ class ScoreboardFeature(Feature):
                 self.create_new_user(comment)
                 
             # Mark the comment as processed so we don't look at it again
-            self.mark_comment_processed(comment)
+            self.mark_item_processed(comment)
 
                 
         
@@ -67,7 +94,7 @@ class ScoreboardFeature(Feature):
             
             # Respond to the comment that the account was created
             comment.reply("New user registered for " + author.name + ". You have 0 points.")
-            self.mark_comment_processed(comment)
+            self.mark_item_processed(comment)
             
         
         except ClientError as e:
