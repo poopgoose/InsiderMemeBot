@@ -65,15 +65,6 @@ class Feature:
         if len(self.__processed_ids_by_time) > Feature.ID_STORE_LIMIT:
             oldest_id = self.__processed_ids_by_time.pop(0) # Pop oldest comment at 0
             self.__processed_ids_by_hash.remove(oldest_id)
-            
-        # DEBUGGING
-        #print("=" * 40)
-        #print("By Time:")
-        #print(self.__processed_ids_by_time)
-        #print("-" * 40)
-        #print("By hash:")
-        #print(self.__processed_ids_by_hash)
-        #print("=" * 40)
     
     def is_processed_recently(self, obj):
         """
@@ -84,6 +75,18 @@ class Feature:
         """
         return obj.id in self.__processed_ids_by_hash
 
+    def did_comment(self, submission):
+        """
+        Returns whether or not the given submission already contains a top-level comment by InsiderMemeBot
+        """
+        return False # TODO
+        
+    def did_reply(self, comment):
+        """
+        Returns whether or not the given comment contains a reply from InsiderMemeBot
+        """
+        return False # TODO
+        
     def is_old(self, obj):
         """
         Returns true if the given submission or comment is over a day old
@@ -91,4 +94,4 @@ class Feature:
         
         time_diff = timedelta(
             seconds=(datetime.utcnow() - datetime.fromtimestamp(obj.created_utc)).total_seconds())
-        print("Post: " + obj.title + "    - Age: " + str(time_diff))
+        return time_diff.days >= 1

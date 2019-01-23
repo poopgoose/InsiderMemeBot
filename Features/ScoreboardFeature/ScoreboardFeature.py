@@ -10,6 +10,23 @@ class ScoreboardFeature(Feature):
     A feature that keeps score for the subreddit users
     """   
     
+    
+    # Text constants
+    NEW_SUBMISSION_REPLY = "Thank you for posting your meme creation!\n" + \
+                           "Distributors may reply to this comment with the command\n" + \
+                           "\n" + \
+                           "!example <link to example>\n" + \
+                           "\n" + \
+                           "Additional text can follow the command if desired. Only examples that are direct replies to " + \
+                           "this comment will be processed.\n" + \
+                           "\n" + \
+                           "NOTE TO DISTRIBUTORS:\n" + \
+                           "If your link leads anywhere that is NOT a subreddit, the commment will automatically be" + \
+                           "removed and you will be banned from r/InsiderMemeTrading. This rule is to protect everyone's security.\n"
+           
+    
+    
+    
     def __init__(self, reddit, subreddit_name):
         super(ScoreboardFeature, self).__init__(reddit, subreddit_name) # Call super constructor
         
@@ -29,22 +46,17 @@ class ScoreboardFeature(Feature):
     def check_submissions(self):
         # Get the 10 latest comments
         for submission in self.subreddit.new(limit=10):
-            if self.is_old(submission):
+            if self.is_old(submission) or \
+               self.is_processed_recently(submission) or \
+               self.did_comment(submission):
                 continue
-            #if submission.created_utc < self.start_time:
-                # Ignore submissions that are over a day old
-                #print("Old post: " + str(submission.title))
-                #print("Submission time: " + str(submission.created_utc))
-                #print("Script start   : " + str(self.start_time))
-                #continue
-             
-            print("New submission: " + str(submission))
-            if self.is_processed_recently(submission):
-                # Ignore submissions that the ScoreboardFeature has already processed
-                continue
-                        
-               
-            print("new submission: " + str(submission))
+            
+            # Reply to the submission
+            reply = submission.reply(ScoreboardFeature.NEW_SUBMISSION_REPLY)
+            reply.mod.distinguish(how='yes', sticky=True)
+            
+            print("New submission: " + str(submission.title))
+            
             # Mark the submission as processed so we don't look at it again
             self.mark_item_processed(submission)
 
