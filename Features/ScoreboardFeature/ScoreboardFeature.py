@@ -44,11 +44,16 @@ class ScoreboardFeature(Feature):
         self.check_comments()
     
     def check_submissions(self):
-        # Get the 10 latest comments
+        # Get the 10 latest submissions
         for submission in self.subreddit.new(limit=10):
-            if self.is_old(submission) or \
-               self.is_processed_recently(submission) or \
-               self.did_comment(submission):
+        
+            if self.is_processed_recently(submission):
+                # Skip over anything we've already looked at
+                continue
+                
+            elif self.is_old(submission) or self.did_comment(submission):
+                # Nothing to be done for old posts or posts that the bot has already commented on
+                self.mark_item_processed(submission)
                 continue
             
             # Reply to the submission
