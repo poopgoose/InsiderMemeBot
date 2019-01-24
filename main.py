@@ -4,8 +4,6 @@ from InsiderMemeBot import InsiderMemeBot
 import json
 import os
 import sys
-from boto3
-
 
 ###########################
 ##    TEST-MODE FLAG     ##
