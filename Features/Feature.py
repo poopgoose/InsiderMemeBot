@@ -79,7 +79,13 @@ class Feature:
         """
         Returns whether or not the given submission already contains a top-level comment by InsiderMemeBot
         """
-        return False # TODO
+        for comment in submission.comments:
+            if comment.author.id == self.reddit.user.me().id:
+                # The comment was by this bot
+                print("Already responded to post: " + submission.title)
+                return True
+                
+        return False
         
     def did_reply(self, comment):
         """

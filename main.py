@@ -67,8 +67,6 @@ reddit = praw.Reddit(client_id = CLIENT_ID,
                      username=USERNAME)
 
 
-# Verify that we are authenticated
-print(reddit.user.me())
 
 #########################
 
