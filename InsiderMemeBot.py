@@ -35,7 +35,6 @@ class InsiderMemeBot:
         """
         Initializes the list of Features that the bot will implement
         """
-        print("INIT")
         #self.features.append(ActivityTracker(self.reddit, self.subreddit_name))
         self.features.append(ScoreboardFeature(self.reddit, self.subreddit_name))
         
