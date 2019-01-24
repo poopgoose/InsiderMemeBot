@@ -36,7 +36,8 @@ class InsiderMemeBot:
         Initializes the list of Features that the bot will implement
         """
         #self.features.append(ActivityTracker(self.reddit, self.subreddit_name))
-        self.features.append(ScoreboardFeature(self.reddit, self.subreddit_name))
+        #self.features.append(ScoreboardFeature(self.reddit, self.subreddit_name))
+        
         
     def run(self):
         """
@@ -46,7 +47,8 @@ class InsiderMemeBot:
             for feature in self.features:
                 if feature.check_condition():
                     feature.perform_action()
-                    
+            print("STEP")
+            time.sleep(1)
                 # Run the next loop in 1 second
                 #time.sleep(1)
 
