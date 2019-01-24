@@ -4,6 +4,7 @@ from InsiderMemeBot import InsiderMemeBot
 import json
 import os
 import sys
+from boto3
 
 
 ###########################
@@ -15,7 +16,12 @@ import sys
 # When TEST_MODE is false, the bot will use r/InsiderMemeTrading.
 TEST_MODE = True
 
-
+#############################
+##       HEROKU FLAG       ##
+#############################
+# When HEROKU is True, the bot will assume it is running on Heroku, and will attempt
+# to use the credentials that are stored in the Heroku configuration variables.
+HEROKU = True
 
 ################################
 ##     HELPER FUNCTIONS       ##
@@ -54,6 +60,11 @@ USERNAME = "InsiderMemeBot"
 if len(sys.argv) > 1:
     # If the user provided a credentials JSON file, then use that to get the information
     CLIENT_SECRET, PASSWORD = parseCredentials(sys.argv[1])
+elif HEROKU:
+    # The bot is running on Heroku
+    CLIENT_SECRET = os.environ['CLIENTSECRET']
+    PASSWORD      = os.environ['PASSWORD']
+    
 else:
     # Prompt user for client secret and the password
     CLIENT_SECRET = getpass("Client secret: ")
