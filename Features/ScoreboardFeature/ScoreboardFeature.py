@@ -33,7 +33,7 @@ class ScoreboardFeature(Feature):
         # Initialize the Amazon Web Service DynamoDB.
         # For this to work, the AWS credentials must be present on the system.
         # This can be done by using "pip install awscli", and then running "aws configure"
-        self.dynamodb = boto3.resource('dynamodb')
+        self.dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
         self.user_table = self.dynamodb.Table('Users')
             
     def check_condition(self):
