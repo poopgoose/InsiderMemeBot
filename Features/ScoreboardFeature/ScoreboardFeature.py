@@ -69,6 +69,10 @@ class ScoreboardFeature(Feature):
             
             # Mark the submission as processed so we don't look at it again
             self.mark_item_processed(submission)
+            
+         
+        # Update the submissions being tracked
+        self.submission_tracker.update_scores(self.reddit)        
 
         
     def check_comments(self):
