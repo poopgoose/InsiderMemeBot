@@ -4,6 +4,7 @@ import boto3
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key
 import json
+from Features.ScoreboardFeature.SubmissionTracker import SubmissionTracker
 
 class ScoreboardFeature(Feature):
     """
@@ -35,6 +36,9 @@ class ScoreboardFeature(Feature):
         # This can be done by using "pip install awscli", and then running "aws configure"
         self.dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
         self.user_table = self.dynamodb.Table('Users')
+        
+        # The submission tracker
+        self.submission_tracker = SubmissionTracker(self.dynamodb)
             
     def check_condition(self):
         return True
@@ -59,7 +63,8 @@ class ScoreboardFeature(Feature):
             # Reply to the submission
             reply = submission.reply(ScoreboardFeature.NEW_SUBMISSION_REPLY)
             reply.mod.distinguish(how='yes', sticky=True)
-            
+            # Track the submission for scoring
+            self.submission_tracker.add_submission(submission)
             print("New submission: " + str(submission.title))
             
             # Mark the submission as processed so we don't look at it again
