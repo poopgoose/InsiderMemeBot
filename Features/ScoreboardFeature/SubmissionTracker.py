@@ -17,7 +17,7 @@ class SubmissionTracker(Feature):
     TRACK_DURATION_SECONDS = 24 * 60 * 60 # 24 hours (in seconds)
     
     # How often to check the submission to update the score
-    SCORE_UPDATE_INTERVAL =  1 * 60 # 1 minute
+    SCORE_UPDATE_INTERVAL =  1 * 10 # 1 minute
     
     def __init__(self, dynamodb):
         # Initialize the variables
@@ -84,8 +84,25 @@ class SubmissionTracker(Feature):
                 print("Updated Score for submission: " + submission.title + "(" + submission_id + ")   score: " + str(updated_score))
                 tracking_dict["next_update"] = cur_time + SubmissionTracker.SCORE_UPDATE_INTERVAL
                 
-            if cur_time >= tracking_dict["expire_time"]:
-                expired_ids.append(submission_id)
+                # Update the database
+                try:
+                    # Update the Submissions Table
+                    response = self.submissions_table.update_item(
+                        Key={'submission_id' : submission_id,
+                             'created_utc' : decimal.Decimal(submission.created_utc)},
+                        UpdateExpression = "set score = :r",
+                        ExpressionAttributeValues={
+                            ':r' : decimal.Decimal(updated_score)
+                        },
+                        ReturnValues = "UPDATED_NEW"
+                    )
+                    print("UpdateItem succeeded!")
+                except ClientError as e:
+                    print(e.response['Error']['Message'])       
+                    
+                # If we have passed the expiration time, then remove the submission from tracking after this update
+                if cur_time >= tracking_dict["expire_time"]:
+                    expired_ids.append(submission_id)
              
          
         # Remove any submissions that have expired
