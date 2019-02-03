@@ -103,6 +103,7 @@ class ScoreboardFeature(Feature):
         if self.is_user(author):
             # The user already has an account
             comment.reply("There is already an account for " + author.name)
+            self.mark_item_processed(comment)
             return
             
         # If we get here, then the user doesn't have an account already, so we create one
@@ -144,6 +145,7 @@ class ScoreboardFeature(Feature):
             if len(response['Items']) == 0:
                 comment.reply("You don't have an account yet!\n\n" + \
                     "Reply with '!new' to create one.")
+                self.mark_item_processed(comment)
                 return
 
             user = response['Items'][0]
