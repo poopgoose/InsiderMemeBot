@@ -161,6 +161,7 @@ class ScoreboardFeature(Feature):
 
             user = response['Items'][0]
            
+           ### Compute submission score ###
             # The scores for any items that have already finished tracking
             submission_score_from_db = user['submission_score']
 
@@ -170,10 +171,19 @@ class ScoreboardFeature(Feature):
 
             total_submission_score = submission_score_from_db + submission_score_from_tracking
 
+            ### Compute distribution score ###
+            distribution_score_from_db = user['distribution_score']
+            distribution_score_from_tracking = \
+                self.tracker.get_tracking_example_score(author_id)
+
+            total_distribution_score = distribution_score_from_db + distribution_score_from_tracking
+
+            # The scores for items that are 
+
             # Respond to the comment that the account was created
             comment.reply("**Score for " + comment.author.name + ":**\n\n" + \
-                "  **Submissions:**   " + str(total_submission_score) + "\n\n" + \
-                "  **Distributions:** " + str(0)) # TODO
+                "  Submission:   " + str(total_submission_score) + "\n\n" + \
+                "  Distribution: " + str(total_distribution_score))
             self.mark_item_processed(comment)
                         
         
@@ -186,7 +196,7 @@ class ScoreboardFeature(Feature):
         """
         print("Processing example: " + str(comment.body))
 
-        url_matches = re.findall(r"https\:\/\/www\.[a-zA-Z0-9\.\/_]+", comment.body)
+        url_matches = re.findall(r"https\:\/\/www\.[a-zA-Z0-9\.\/_\\]+", comment.body)
 
         if url_matches is None or len(url_matches) == 0:
             print("Invalid example: " + comment.body)
@@ -251,7 +261,11 @@ class ScoreboardFeature(Feature):
 
 
             # If the example passed all the verification, track it!
+            # TODO - Update % with actual number
             parent_submission = comment.submission
+            comment.reply("Thank you for the example!\n\n\n\n" + \
+                "I'll check your post periodically over the next 24 hours and update your score. " + \
+                "A 20% commission will go to the creator of the meme template.")
             self.tracker.track_example(parent_submission, example_submission)
 
         except praw.exceptions.ClientException as e:

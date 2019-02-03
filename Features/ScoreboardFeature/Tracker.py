@@ -28,6 +28,10 @@ class Tracker:
         # How often to check the submission to update the score
         self.SCORE_UPDATE_INTERVAL =  1 * 60 # 1 minute
 
+        # The amount of the distributor's score that goes to the creator
+        self.CREATOR_COMMISSION = 0.20  
+
+
         # If debugging, use debug values
         if self.DEBUG:
             self.TRACK_DURATION_SECONDS = Debug.TRACK_DURATION_SECONDS
@@ -97,9 +101,12 @@ class Tracker:
     
         cur_time = int(time.time())
         
-        # For each dictionary in the tracking dict, update the score if the current time is >= the next update time.
-        # If the tracked submission has expired, add it to expired_ids for removal.
-        expired_ids = []
+        # For each dictionary in the tracking dicts, update the score if the current time is >= the next update time.
+        # If any tracked submission/example has expired, add it to a list for removal.
+
+        expired_submission_ids = []
+        expired_example_ids = []
+
         for submission_id in self.submission_tracking_dict:
             tracking_dict = self.submission_tracking_dict[submission_id]
             
@@ -111,12 +118,28 @@ class Tracker:
 
                 # If we have passed the expiration time, then remove the submission from tracking after this update
                 if cur_time >= tracking_dict["expire_time"]:
-                    expired_ids.append(submission_id)
+                    expired_submission_ids.append(submission_id)
              
-         
-        # Remove any submissions that have expired
-        for submission_id in expired_ids:
+         # Examples
+        for example_id in self.example_tracking_dict:
+            tracking_dict = self.example_tracking_dict[example_id]
+
+            if cur_time >= tracking_dict["next_update"]:
+                example = self.reddit.submission(example_id)
+                updated_score = example.score
+                tracking_dict["next_update"] = cur_time + self.SCORE_UPDATE_INTERVAL
+                tracking_dict["score"] = updated_score
+
+                # If we have passed the expiration time, then remove the submission from tracking after this update
+                if cur_time >= tracking_dict["expire_time"]:
+                    expired_example_ids.append(example_id)
+
+        # Remove any submissions and examples that have expired
+        for submission_id in expired_submission_ids:
             self.untrack_submission(submission_id)
+
+        for example_id in expired_example_ids:
+            self.untrack_example(example_id)
 
 
     def get_tracking_submission_score(self, user_id):
@@ -132,8 +155,30 @@ class Tracker:
             if tracking_dict["user_id"] == user_id:
                 total_submission_score = total_submission_score + tracking_dict["score"]
 
+        # Add commissions from any examples being tracked
+        for example_id in self.example_tracking_dict:
+            tracking_dict = self.example_tracking_dict[example_id]
+            if tracking_dict["creator_user_id"] == user_id:
+                total_submission_score = total_submission_score + \
+                    int(round(tracking_dict["score"] * self.CREATOR_COMMISSION))
+
+
         print("Score from tracked submissions: " + str(total_submission_score))
         return total_submission_score
+
+    def get_tracking_example_score(self, user_id):
+        """
+        Returns the total score of all distributed examples being tracked for the user
+        """
+        total_distribution_score = 0
+        for example_id in self.example_tracking_dict:
+            tracking_dict = self.example_tracking_dict[example_id]
+            if tracking_dict["distributor_user_id"] == user_id:
+                # Take out the commission for the content creator
+                total_distribution_score = total_distribution_score + \
+                    int(round(tracking_dict["score"] * (1 - self.CREATOR_COMMISSION)))
+
+        return total_distribution_score
 
     def untrack_submission(self, submission_id):
         print("Submission has expired: " + submission_id)
@@ -153,5 +198,35 @@ class Tracker:
 
         del self.submission_tracking_dict[submission_id]
 
+    def untrack_example(self, example_id):
+        print("Example has expired: " + example_id)
+        tracking_dict = self.example_tracking_dict[example_id]
+        print("Final score: " + str(tracking_dict["score"]))
+        print("Adding distribution score to user: " + tracking_dict["distributor_user_id"])
+        print("Adding commission score to user: " + tracking_dict["creator_user_id"])
+ 
+        total_score = tracking_dict["score"]
+        distributor_score = int(round(total_score * (1 - self.CREATOR_COMMISSION)))
+        creator_score = int(round(total_score * self.CREATOR_COMMISSION))
+
+        # Update the scores
+        try:
+            # The distributor
+            response = self.users_table.update_item(
+                Key={'user_id' : tracking_dict["distributor_user_id"]},
+                UpdateExpression = "set distribution_score = distribution_score + :score",
+                ExpressionAttributeValues = {":score" : decimal.Decimal(distribution_score)}
+            )
+
+            # The content creator
+            response = self.users_table.update_item(
+                Key={'user_id' : tracking_dict["creator_user_id"]},
+                UpdateExpression = "set submission_score = submission_score + :score",
+                ExpressionAttributeValues = {":score" : decimal.Decimal(submission_score)}
+            )
+
+        except ClientError as e:
+            print(e.response['Error']['Message'])
+            traceback.print_exc()
 
             
