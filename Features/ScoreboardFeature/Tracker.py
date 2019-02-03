@@ -37,12 +37,12 @@ class Tracker:
         self.reddit = reddit
         self.dynamodb = dynamodb
         self.last_update_time = 0 # The time the submissions were last checked (Unix Epoch Time)
-        self.tracking_dicts = {}
+        self.submission_tracking_dict = {}
+        self.example_tracking_dict = {}
         
         # The tables that we'll be using
         self.users_table = self.dynamodb.Table("Users")
         self.submissions_table = self.dynamodb.Table("Submissions")
-        self.tracking_table = self.dynamodb.Table("Tracking")            
         
     def track_submission(self, submission):
         """
@@ -51,7 +51,7 @@ class Tracker:
         """
         create_time = submission.created_utc
         
-        # Create an entry in the tracking_dict so we know when to update
+        # Create an entry in the submission_tracking_dict so we know when to update
         tracking_dict = {
            "next_update" : create_time + self.SCORE_UPDATE_INTERVAL,
            "expire_time" : create_time + self.TRACK_DURATION_SECONDS,
@@ -61,14 +61,37 @@ class Tracker:
 
         print("Tracking submission: " )
         print(tracking_dict)
-        self.tracking_dicts[submission.id] = tracking_dict
+        self.submission_tracking_dict[submission.id] = tracking_dict
         
-    def track_comment(self, comment):
+    def track_example(self, parent_submission, example_submission):
         """
-        Adds a new comment to be tracked
-        comment: The PRAW Comment object
+        Adds a new example to be tracked
+        parent_submission: The submission that the comment is in. They will get a % of the score from the 
+            distributed example.
+
+        example_submission: The submission of the distributed example
         """
-        pass
+
+        # Create an entry in the example_tracking_dict so we know when to update
+        create_time = example_submission.created_utc
+        tracking_dict = {
+            "next_update" : create_time + self.SCORE_UPDATE_INTERVAL,
+            "expire_time" : create_time + self.TRACK_DURATION_SECONDS,
+            "score" : example_submission.score,
+            "distributor_user_id" : example_submission.author.id,
+            "creator_user_id" : parent_submission.author.id
+        }
+
+        print("Tracking Example: " )
+        print(tracking_dict)
+        self.example_tracking_dict[example_submission.id] = tracking_dict
+
+    def is_example_tracked(self, submission_id):
+        """
+        Returns True if the given submission ID is already the ID of a tracked example submission
+        """
+        return submission_id in self.example_tracking_dict
+
 
     def update_scores(self):
     
@@ -77,8 +100,8 @@ class Tracker:
         # For each dictionary in the tracking dict, update the score if the current time is >= the next update time.
         # If the tracked submission has expired, add it to expired_ids for removal.
         expired_ids = []
-        for submission_id in self.tracking_dicts:
-            tracking_dict = self.tracking_dicts[submission_id]
+        for submission_id in self.submission_tracking_dict:
+            tracking_dict = self.submission_tracking_dict[submission_id]
             
             if cur_time >= tracking_dict["next_update"]:
                 submission = self.reddit.submission(submission_id)
@@ -102,8 +125,8 @@ class Tracker:
         """
         total_submission_score = 0
 
-        for submission_id in self.tracking_dicts:
-            tracking_dict = self.tracking_dicts[submission_id]
+        for submission_id in self.submission_tracking_dict:
+            tracking_dict = self.submission_tracking_dict[submission_id]
 
             # The tracked item is for the requested user
             if tracking_dict["user_id"] == user_id:
@@ -114,7 +137,7 @@ class Tracker:
 
     def untrack_submission(self, submission_id):
         print("Submission has expired: " + submission_id)
-        tracking_dict = self.tracking_dicts[submission_id]
+        tracking_dict = self.submission_tracking_dict[submission_id]
         print("Final score: " + str(tracking_dict["score"]))
         print("Adding score to user: " + tracking_dict["user_id"])
         # Update the score for the user before we untrack
@@ -128,7 +151,7 @@ class Tracker:
             print(e.response['Error']['Message'])
             traceback.print_exc()
 
-        del self.tracking_dicts[submission_id]
+        del self.submission_tracking_dict[submission_id]
 
 
             
