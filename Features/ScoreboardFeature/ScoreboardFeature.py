@@ -4,7 +4,8 @@ import boto3
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key
 import json
-from Features.ScoreboardFeature.SubmissionTracker import SubmissionTracker
+from Features.ScoreboardFeature.Tracker import Tracker
+from Features.ScoreboardFeature import Debug
 
 class ScoreboardFeature(Feature):
     """
@@ -36,9 +37,10 @@ class ScoreboardFeature(Feature):
         # This can be done by using "pip install awscli", and then running "aws configure"
         self.dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
         self.user_table = self.dynamodb.Table('Users')
+        self.submissions_table = self.dynamodb.Table('Submissions')
         
-        # The submission tracker
-        self.submission_tracker = SubmissionTracker(self.dynamodb)
+        # The score tracker
+        self.tracker = Tracker(self.reddit, self.dynamodb)
             
     def check_condition(self):
         return True
@@ -54,7 +56,7 @@ class ScoreboardFeature(Feature):
             if self.is_processed_recently(submission):
                 # Skip over anything we've already looked at
                 continue
-                
+                    
             elif self.is_old(submission) or self.did_comment(submission):
                 # Nothing to be done for old posts or posts that the bot has already commented on
                 self.mark_item_processed(submission)
@@ -64,7 +66,7 @@ class ScoreboardFeature(Feature):
             reply = submission.reply(ScoreboardFeature.NEW_SUBMISSION_REPLY)
             reply.mod.distinguish(how='yes', sticky=True)
             # Track the submission for scoring
-            self.submission_tracker.add_submission(submission)
+            self.tracker.track_submission(submission)
             print("New submission: " + str(submission.title))
             
             # Mark the submission as processed so we don't look at it again
@@ -72,7 +74,7 @@ class ScoreboardFeature(Feature):
             
          
         # Update the submissions being tracked
-        self.submission_tracker.update_scores(self.reddit)        
+        self.tracker.update_scores()        
 
         
     def check_comments(self):
@@ -81,9 +83,12 @@ class ScoreboardFeature(Feature):
             if self.is_processed_recently(comment):
                 # Ignore comments that the ScoreboardFeature has already processed
                 continue
+                
             # Determine if the comment is an action
             if comment.body.strip() == "!new":
                 self.create_new_user(comment)
+            elif comment.body.strip() == "!score":
+                self.process_score(comment)
                 
             # Mark the comment as processed so we don't look at it again
             self.mark_item_processed(comment)
@@ -126,6 +131,34 @@ class ScoreboardFeature(Feature):
         except ClientError as e:
             print(e.response['Error']['Message'])
             
+    def process_score(self, comment):
+        """
+        Update and report the score for the user
+        """
+        
+        ### Submission Score ###
+        try:
+            author_id = comment.author.id
+            response = self.submissions_table.query(
+                KeyConditionExpression=Key('user_id').eq(author_id)
+            )
+            print("Score query succeeded:")
+            total_submission_score = 0
+            for i in response['Items']:
+                total_submission_score = total_submission_score + i['score']
+                print(i['score'])
+            
+            # Respond to the comment that the account was created
+            comment.reply("Score for " + comment.author.name + ":" + \
+                "Submissions:   " + str(total_submission_score) + \
+                "Distributions: " + str(0)) # TODO                 
+            self.mark_item_processed(comment)
+            
+            # TODO - Update the database
+            
+        
+        except ClientError as e:
+            print(e.response['Error']['Message'])
             
     ################## Helper functions ##################
     def is_user(self, author):
