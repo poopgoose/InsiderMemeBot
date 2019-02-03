@@ -49,7 +49,7 @@ class ScoreboardFeature(Feature):
         return True
     
     def perform_action(self):
-        #self.check_submissions()
+        self.check_submissions()
         self.check_comments()
     
     def check_submissions(self):
