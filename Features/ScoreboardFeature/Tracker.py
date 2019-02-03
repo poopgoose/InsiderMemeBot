@@ -49,54 +49,7 @@ class Tracker:
         Adds a new submission to be tracked
         submission: The PRAW Submission object
         """
-        #submission_id = submission.id
-        #user = submission.author
-        #user_id = user.id
         create_time = submission.created_utc
-        #user_id = submission.author.id
-        #permalink = submission.permalink
-        #title = submission.title
-        #score = submission.score
-       #expire_time = create_time + self.TRACK_DURATION_SECONDS
-        
-        # Add the submission information to the database
-        #try:
-            # Create the submission in the TrackingTable
-            #response = self.submissions_table.put_item(
-            #    Item={
-            #       'submission_id' : submission_id,
-            #       'title' : title,
-            #       'created_utc' : decimal.Decimal(create_time),
-            #       'user_id' : user_id,
-            #       'permalink' : permalink,
-            #       'score' : decimal.Decimal(score)
-            #    }
-            #)
-        #    response = self.tracking_table.put_item(
-        #        Item={
-        #           'item_id' : submission_id,
-        #           'create_time_utc' : decimal.Decimal(create_time),
-        #           'expire_time_utc' : decimal.Decimal(expire_time),
-        #           'is_comment' : False,
-        #           'is_submission' : True,
-        #           'last_update_utc' : 0,
-        #           'user_id' : user_id,
-        #           'score' : decimal.Decimal(score)
-        #        }
-        #    )
-            
-            # Add the submission ID for the user in the Users table
-            #response = self.users_table.update_item(
-            #    Key={'user_id' : user_id},
-            #    UpdateExpression = "SET submissions = list_append(submissions, :val)",
-            #    ExpressionAttributeValues={':val' : [submission_id]})
-
-            #print("Tracking post: " + title)
-            
-        #except ClientError as e:
-        #    print(e.response['Error']['Message'])
-        #    traceback.print_exc()
-        
         
         # Create an entry in the tracking_dict so we know when to update
         tracking_dict = {
@@ -132,22 +85,7 @@ class Tracker:
                 updated_score = submission.score
                 tracking_dict["next_update"] = cur_time + self.SCORE_UPDATE_INTERVAL
                 tracking_dict["score"] = updated_score
-                # Update the database
-                #try:
-                #    # Update the Submissions Table
-                #    response = self.submissions_table.update_item(
-                #        Key={'submission_id' : submission_id,
-                #             'created_utc' : decimal.Decimal(submission.created_utc)},
-                #        UpdateExpression = "set score = :r",
-                #        ExpressionAttributeValues={
-                #            ':r' : decimal.Decimal(updated_score)
-                #        },
-                #        ReturnValues = "UPDATED_NEW"
-                #    )
-                #except ClientError as e:
-                #    print(e.response['Error']['Message'])
-                #    traceback.print_exc()
-                    
+
                 # If we have passed the expiration time, then remove the submission from tracking after this update
                 if cur_time >= tracking_dict["expire_time"]:
                     expired_ids.append(submission_id)
@@ -158,6 +96,21 @@ class Tracker:
             self.untrack_submission(submission_id)
 
 
+    def get_tracking_submission_score(self, user_id):
+        """
+        Returns the total score of all submissions being tracked for the user
+        """
+        total_submission_score = 0
+
+        for submission_id in self.tracking_dicts:
+            tracking_dict = self.tracking_dicts[submission_id]
+
+            # The tracked item is for the requested user
+            if tracking_dict["user_id"] == user_id:
+                total_submission_score = total_submission_score + tracking_dict["score"]
+
+        print("Score from tracked submissions: " + str(total_submission_score))
+        return total_submission_score
 
     def untrack_submission(self, submission_id):
         print("Submission has expired: " + submission_id)
@@ -174,20 +127,6 @@ class Tracker:
         except ClientError as e:
             print(e.response['Error']['Message'])
             traceback.print_exc()
-
-                #    # Update the Submissions Table
-                #    response = self.submissions_table.update_item(
-                #        Key={'submission_id' : submission_id,
-                #             'created_utc' : decimal.Decimal(submission.created_utc)},
-                #        UpdateExpression = "set score = :r",
-                #        ExpressionAttributeValues={
-                #            ':r' : decimal.Decimal(updated_score)
-                #        },
-                #        ReturnValues = "UPDATED_NEW"
-                #    )
-                #except ClientError as e:
-                #    print(e.response['Error']['Message'])
-                #    traceback.print_exc()
 
         del self.tracking_dicts[submission_id]
 
