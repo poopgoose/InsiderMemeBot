@@ -20,7 +20,7 @@ class Tracker:
 
         # Constants
         # Enables/Disables debug mode for SubmissionTracker
-        self.DEBUG = True
+        self.DEBUG = False
     
         # The duration, in seconds, for which to track each post
         self.TRACK_DURATION_SECONDS = 24 * 60 * 60 # 24 hours (in seconds)
