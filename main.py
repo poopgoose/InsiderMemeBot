@@ -51,10 +51,17 @@ def parseCredentials(jsonConfig):
 ##     AUTHENTICATION    ##
 ###########################
 
-CLIENT_ID = "i-LOKCs1KuHE6Q"
-USER_AGENT = "InsiderMemeBotScript by /u/InsiderMemeBot"
-USERNAME = "InsiderMemeBot"
-
+if HEROKU:
+    # Use the live bot that is hosted on Heroku
+    CLIENT_ID = "i-LOKCs1KuHE6Q"
+    USER_AGENT = "InsiderMemeBotScript by /u/InsiderMemeBot"
+    USERNAME = "InsiderMemeBot"
+else:
+    # Use the dev bot for local testing
+    CLIENT_ID = "l4Oi3AF4xUY-Ng"
+    USER_AGENT = "InsiderMemeBotDevScript by /u/InsiderMemeBot-dev"
+    USERNAME = "InsiderMemeBot-dev"
+    
 if len(sys.argv) > 1:
     # If the user provided a credentials JSON file, then use that to get the information
     CLIENT_SECRET, PASSWORD = parseCredentials(sys.argv[1])
