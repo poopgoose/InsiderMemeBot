@@ -14,17 +14,18 @@ class ScoreboardFeature(Feature):
     
     
     # Text constants
-    NEW_SUBMISSION_REPLY = "Thank you for posting your meme creation!\n" + \
-                           "Distributors may reply to this comment with the command\n" + \
-                           "\n" + \
-                           "!example <link to example>\n" + \
-                           "\n" + \
+    NEW_SUBMISSION_REPLY = "Thank you for posting your meme creation!\n\n" + \
+                           "Distributors may reply to this comment with the command\n\n" + \
+                           "\n\n" + \
+                           "!example <link to example>\n\n" + \
+                           "\n\n" + \
                            "Additional text can follow the command if desired. Only examples that are direct replies to " + \
-                           "this comment will be processed.\n" + \
-                           "\n" + \
-                           "NOTE TO DISTRIBUTORS:\n" + \
-                           "If your link leads anywhere that is NOT a subreddit, the commment will automatically be" + \
-                           "removed and you will be banned from r/InsiderMemeTrading. This rule is to protect everyone's security.\n"
+                           "this comment will be processed.\n\n" + \
+                           "\n\n" + \
+                           "NOTE TO DISTRIBUTORS:\n\n" + \
+                           "Only links to cross-posts in other subreddits can be scored.\n\n " + \
+                           "If your link leads anywhere that is NOT a subreddit or one of our approved websites, then the commment will automatically be" + \
+                           "removed. This rule is to protect everyone's security.\n\n"
            
     
     
@@ -82,6 +83,7 @@ class ScoreboardFeature(Feature):
         for comment in self.subreddit.comments(limit=100):
             if self.is_processed_recently(comment):
                 # Ignore comments that the ScoreboardFeature has already processed
+                # TODO - Add check for did_reply
                 continue
                 
             # Determine if the comment is an action
@@ -94,9 +96,7 @@ class ScoreboardFeature(Feature):
             self.mark_item_processed(comment)
 
                 
-        
-                        
-        
+    
     ############# Process actions #############
     def create_new_user(self, comment):
         """
@@ -116,7 +116,8 @@ class ScoreboardFeature(Feature):
                 Item={
                    'user_id' : author.id,
                    'username' : author.name,
-                   'score' : 0
+                   'submission_score' : 0,
+                   'distribution_score' :0
                 }
             )
             
@@ -139,23 +140,34 @@ class ScoreboardFeature(Feature):
         ### Submission Score ###
         try:
             author_id = comment.author.id
-            response = self.submissions_table.query(
+            response = self.user_table.query(
                 KeyConditionExpression=Key('user_id').eq(author_id)
             )
             print("Score query succeeded:")
-            total_submission_score = 0
-            for i in response['Items']:
-                total_submission_score = total_submission_score + i['score']
-                print(i['score'])
-            
+
+            # If there isn't a user, then reply as such and return.
+            if len(response['Items']) == 0:
+                comment.reply("You don't have an account yet!\n\n" + \
+                    "Reply with '!new' to create one.")
+                return
+
+            user = response['Items'][0]
+           
+            # The scores for any items that have already finished tracking
+            submission_score_from_db = user['submission_score']
+
+            # The scores for items that are currently being tracked
+            submission_score_from_tracking = \
+                self.tracker.get_tracking_submission_score(author_id)
+
+            total_submission_score = submission_score_from_db + submission_score_from_tracking
+
             # Respond to the comment that the account was created
-            comment.reply("Score for " + comment.author.name + ":" + \
-                "Submissions:   " + str(total_submission_score) + \
-                "Distributions: " + str(0)) # TODO                 
+            comment.reply("**Score for " + comment.author.name + ":**\n\n" + \
+                "  **Submissions:**   " + str(total_submission_score) + "\n\n" + \
+                "  **Distributions:** " + str(0)) # TODO
             self.mark_item_processed(comment)
-            
-            # TODO - Update the database
-            
+                        
         
         except ClientError as e:
             print(e.response['Error']['Message'])
