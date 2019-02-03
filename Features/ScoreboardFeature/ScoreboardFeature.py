@@ -6,6 +6,7 @@ from boto3.dynamodb.conditions import Key
 import json
 from Features.ScoreboardFeature.Tracker import Tracker
 from Features.ScoreboardFeature import Debug
+import re
 
 class ScoreboardFeature(Feature):
     """
@@ -47,7 +48,7 @@ class ScoreboardFeature(Feature):
         return True
     
     def perform_action(self):
-        self.check_submissions()
+        #self.check_submissions()
         self.check_comments()
     
     def check_submissions(self):
@@ -91,8 +92,12 @@ class ScoreboardFeature(Feature):
                 self.create_new_user(comment)
             elif comment.body.strip() == "!score":
                 self.process_score(comment)
+            elif comment.body.strip().startswith("!example"):
+                self.process_example(comment)
                 
             # Mark the comment as processed so we don't look at it again
+            # TODO : Determine why bugs were appearing when this line was ommitted from
+            # the helper functions
             self.mark_item_processed(comment)
 
                 
@@ -173,7 +178,65 @@ class ScoreboardFeature(Feature):
         
         except ClientError as e:
             print(e.response['Error']['Message'])
+
+    def process_example(self, comment):
+        """
+        Processes the "!example" command
+        """
+        print("Processing example: " + str(comment.body))
+
+        url_matches = re.findall(r"https\:\/\/www\.[a-zA-Z0-9\.\/_]+", comment.body)
+
+        if url_matches is None or len(url_matches) == 0:
+            print("Invalid example: " + comment.body)
+            print("\n")
+            comment.reply("Thanks for the example, but I couldn't find a URL in your comment.\n\n" + \
+                "\n\nI'm just a bot, so please message the mods if you think I'm making a mistake!")
+            return
+
+        for url in url_matches:
+            print("URL: " + str(url))
+        
+        if len(url_matches) > 1:
+            print("Invalid example: " + comment.body)
+            print("\n")
+            comment.reply("Thanks for the example, but there are too many URLS in your comment.\n\n" + \
+               "Please only include one link per example, so I can score it properly.\n\n" + \
+                "\n\nI'm just a bot, so please message the mods if you think I'm making a mistake!")
+
+            return
+
+        # There should be exactly one url at this point
+        example_url = url_matches[0]
+        print("EXAMPLE URL: " + example_url)
+
+        try:
+            # Try to get the example submission, and track it
+            submission_id = praw.models.Submission.id_from_url(example_url)
+            example_submission = self.reddit.submission(id=submission_id)
+
+
+            # Verify that the example was posted by the comment author
+            if(comment.author.id != example_submission.author.id):
+                print("Comment author mismatch!")
+                comment.reply("Thanks for the example, but only submissions that you posted yourself " + \
+                    "can be scored.\n\n" + \
+                    "\n\nI'm just a bot, so please message the mods if you think I'm making a mistake!")
             
+            else:
+                # The example is a post by the same author.
+                self.tracker.track_example(example_submission)
+
+        except praw.exceptions.ClientException as e:
+            print("Could not get submission from URL: " + example_url)
+            comment.reply("Thanks for the example, but I couldn't find any Reddit post " + \
+                "from the URL tht you provided. Only links to example posts on other subreddits can be scored.\n\n" + \
+                "\n\nI'm just a bot, so please message the mods if you think I'm making a mistake!")    
+            return
+
+        print("\n")
+
+        self.mark_item_processed(comment)
     ################## Helper functions ##################
     def is_user(self, author):
         """
