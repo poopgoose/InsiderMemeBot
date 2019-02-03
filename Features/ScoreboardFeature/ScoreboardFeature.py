@@ -7,6 +7,7 @@ import json
 from Features.ScoreboardFeature.Tracker import Tracker
 from Features.ScoreboardFeature import Debug
 import re
+import time
 
 class ScoreboardFeature(Feature):
     """
@@ -194,27 +195,39 @@ class ScoreboardFeature(Feature):
                 "\n\nI'm just a bot, so please message the mods if you think I'm making a mistake!")
             return
 
+        # Remove duplicate submissions. This can happen if the actual hyperlink is used as the comment body 
+        # TODO: This is a messy workaround. It would be better to use an HTML parser or something to grab
+        # the actual URL from a link, and ignore the text itself.
+        unique_urls = []
+        seen_ids = []
+
         for url in url_matches:
-            print("URL: " + str(url))
-        
-        if len(url_matches) > 1:
+            try:
+                submission_id = praw.models.Submission.id_from_url(url)
+                if submission_id not in seen_ids:
+                    # The URL is a submission that hasn't been encountered yet
+                    unique_urls.append(url)
+                    seen_ids.append(submission_id)
+
+            except praw.exceptions.ClientException as e:
+                # The URL isn't to a reddit submission, so just add it
+                unique_urls.append(url)
+                
+        if len(unique_urls) > 1:
             print("Invalid example: " + comment.body)
             print("\n")
             comment.reply("Thanks for the example, but there are too many URLS in your comment.\n\n" + \
                "Please only include one link per example, so I can score it properly.\n\n" + \
                 "\n\nI'm just a bot, so please message the mods if you think I'm making a mistake!")
-
             return
 
-        # There should be exactly one url at this point
-        example_url = url_matches[0]
-        print("EXAMPLE URL: " + example_url)
+        # At this point, there is only one unique url
+        example_url = unique_urls[0]
 
         try:
             # Try to get the example submission, and track it
             submission_id = praw.models.Submission.id_from_url(example_url)
             example_submission = self.reddit.submission(id=submission_id)
-
 
             # Verify that the example was posted by the comment author
             if(comment.author.id != example_submission.author.id):
@@ -222,10 +235,24 @@ class ScoreboardFeature(Feature):
                 comment.reply("Thanks for the example, but only submissions that you posted yourself " + \
                     "can be scored.\n\n" + \
                     "\n\nI'm just a bot, so please message the mods if you think I'm making a mistake!")
+                return
             
-            else:
-                # The example is a post by the same author.
-                self.tracker.track_example(example_submission)
+            # Verify that the example isn't already being tracked
+            if self.tracker.is_example_tracked(example_submission.id):
+                comment.reply("The example you provided is already being scored! ")
+                return
+
+            # Verify that the post isn't too old to be tracked
+            cur_time = int(time.time())
+            if cur_time > example_submission.created_utc + self.tracker.TRACK_DURATION_SECONDS:
+                comment.reply("The example you provided is too old for me to track the score!\n\n" + \
+                    "Only examples that were posted within the last 24 hours are valid.")
+                return
+
+
+            # If the example passed all the verification, track it!
+            parent_submission = comment.submission
+            self.tracker.track_example(parent_submission, example_submission)
 
         except praw.exceptions.ClientException as e:
             print("Could not get submission from URL: " + example_url)
