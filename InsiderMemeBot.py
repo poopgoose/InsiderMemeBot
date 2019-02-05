@@ -85,7 +85,9 @@ class InsiderMemeBot:
                 for comment in self.subreddit.comments(limit=100):
                     if self.is_processed_recently(comment):
                         continue
-                    elif self.is_old(comment) or self.did_reply(comment):
+                    # Ignore own comments, old comments, and comments already replied to
+                    elif comment.author.id == self.reddit.user.me().id or \
+                    self.is_old(comment) or self.did_reply(comment):
                         self.mark_item_processed(comment)
                         continue
 
@@ -152,7 +154,9 @@ class InsiderMemeBot:
         """
         Returns whether or not the given comment contains a reply from InsiderMemeBot
         """
+        comment.refresh()
         replies = comment.replies
+
         replies.replace_more(limit=None)
         for reply in replies:
             if reply.author.id == self.reddit.user.me().id:
@@ -162,10 +166,11 @@ class InsiderMemeBot:
         
     def is_old(self, obj):
         """
-        Returns true if the given submission or comment is over a day old
+        Returns true if the given comment or submission is more than 10 minutes old.
         """
         
         time_diff = timedelta(
             seconds=(datetime.now() - datetime.fromtimestamp(obj.created_utc)).total_seconds())
 
-        return time_diff.days >= 1
+        return time_diff.seconds//60 > 10
+        #return time_diff.days >= 1
