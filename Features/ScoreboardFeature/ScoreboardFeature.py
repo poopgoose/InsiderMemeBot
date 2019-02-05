@@ -12,7 +12,10 @@ import time
 class ScoreboardFeature(Feature):
     """
     A feature that keeps score for the subreddit users
-    """   
+    """
+    
+    # When true, all comment replies will just be printed to stdout, instead of actually replying
+    DEBUG_MODE_NO_COMMENT = False
     
     
     # Text constants
@@ -45,48 +48,29 @@ class ScoreboardFeature(Feature):
         # The score tracker
         self.tracker = Tracker(self.reddit, self.dynamodb)
             
-    def check_condition(self):
-        return True
+    #def check_condition(self):
+    #    return True
     
-    def perform_action(self):
-        self.check_submissions()
-        self.check_comments()
+    #def perform_action(self):
+    #    self.check_submissions()
+    #    self.check_comments()
     
-    def check_submissions(self):
-        # Get the 10 latest submissions
-        for submission in self.subreddit.new(limit=10):
-        
-            if self.is_processed_recently(submission):
-                # Skip over anything we've already looked at
-                continue
-                    
-            elif self.is_old(submission) or self.did_comment(submission):
-                # Nothing to be done for old posts or posts that the bot has already commented on
-                self.mark_item_processed(submission)
-                continue
-            
-            # Reply to the submission
+    def process_submission(self, submission):
+        # Reply to the submission
+        if not ScoreboardFeature.DEBUG_MODE_NO_COMMENT:
             reply = submission.reply(ScoreboardFeature.NEW_SUBMISSION_REPLY)
             reply.mod.distinguish(how='yes', sticky=True)
-            # Track the submission for scoring
-            self.tracker.track_submission(submission)
-            print("New submission: " + str(submission.title))
-            
-            # Mark the submission as processed so we don't look at it again
-            self.mark_item_processed(submission)
-            
-         
+
+        # Track the submission for scoring
+        self.tracker.track_submission(submission)
+        print("New submission: " + str(submission.title))
+             
         # Update the submissions being tracked
         self.tracker.update_scores()        
 
         
-    def check_comments(self):
+    def process_comment(self, comment):
         # Get the latest 100 comments
-        for comment in self.subreddit.comments(limit=100):
-            if self.is_processed_recently(comment):
-                # Ignore comments that the ScoreboardFeature has already processed
-                # TODO - Add check for did_reply
-                continue
                 
             # Determine if the comment is an action
             if comment.body.strip() == "!new":
@@ -95,12 +79,6 @@ class ScoreboardFeature(Feature):
                 self.process_score(comment)
             elif comment.body.strip().startswith("!example"):
                 self.process_example(comment)
-                
-            # Mark the comment as processed so we don't look at it again
-            # TODO : Determine why bugs were appearing when this line was ommitted from
-            # the helper functions
-            self.mark_item_processed(comment)
-
                 
     
     ############# Process actions #############
@@ -112,8 +90,7 @@ class ScoreboardFeature(Feature):
         author = comment.author
         if self.is_user(author):
             # The user already has an account
-            comment.reply("There is already an account for " + author.name)
-            self.mark_item_processed(comment)
+            self.reply_to_comment(comment, "There is already an account for " + author.name)
             return
             
         # If we get here, then the user doesn't have an account already, so we create one
@@ -132,9 +109,7 @@ class ScoreboardFeature(Feature):
             print(" Response: " + str(response))
             
             # Respond to the comment that the account was created
-            comment.reply("New user registered for " + author.name + ". You have 0 points.")
-            self.mark_item_processed(comment)
-            
+            self.reply_to_comment(comment, "New user registered for " + author.name + ". You have 0 points.")            
         
         except ClientError as e:
             print(e.response['Error']['Message'])
@@ -154,9 +129,8 @@ class ScoreboardFeature(Feature):
 
             # If there isn't a user, then reply as such and return.
             if len(response['Items']) == 0:
-                comment.reply("You don't have an account yet!\n\n" + \
+                self.reply_to_comment(comment, "You don't have an account yet!\n\n" + \
                     "Reply with '!new' to create one.")
-                self.mark_item_processed(comment)
                 return
 
             user = response['Items'][0]
@@ -181,10 +155,9 @@ class ScoreboardFeature(Feature):
             # The scores for items that are 
 
             # Respond to the comment that the account was created
-            comment.reply("**Score for " + comment.author.name + ":**\n\n" + \
+            self.reply_to_comment(comment, "**Score for " + comment.author.name + ":**\n\n" + \
                 "  Submission:   " + str(total_submission_score) + "\n\n" + \
                 "  Distribution: " + str(total_distribution_score))
-            self.mark_item_processed(comment)
                         
         
         except ClientError as e:
@@ -201,8 +174,7 @@ class ScoreboardFeature(Feature):
         if url_matches is None or len(url_matches) == 0:
             print("Invalid example: " + comment.body)
             print("\n")
-            comment.reply("Thanks for the example, but I couldn't find a URL in your comment.\n\n" + \
-                "\n\nI'm just a bot, so please message the mods if you think I'm making a mistake!")
+            self.reply_to_comment(comment, "Thanks for the example, but I couldn't find a URL in your comment.")
             return
 
         # Remove duplicate submissions. This can happen if the actual hyperlink is used as the comment body 
@@ -226,9 +198,8 @@ class ScoreboardFeature(Feature):
         if len(unique_urls) > 1:
             print("Invalid example: " + comment.body)
             print("\n")
-            comment.reply("Thanks for the example, but there are too many URLS in your comment.\n\n" + \
-               "Please only include one link per example, so I can score it properly.\n\n" + \
-                "\n\nI'm just a bot, so please message the mods if you think I'm making a mistake!")
+            self.reply_to_comment(comment, "Thanks for the example, but there are too many URLS in your comment.\n\n" + \
+               "Please only include one link per example, so I can score it properly.")
             return
 
         # At this point, there is only one unique url
@@ -242,20 +213,18 @@ class ScoreboardFeature(Feature):
             # Verify that the example was posted by the comment author
             if(comment.author.id != example_submission.author.id):
                 print("Comment author mismatch!")
-                comment.reply("Thanks for the example, but only submissions that you posted yourself " + \
-                    "can be scored.\n\n" + \
-                    "\n\nI'm just a bot, so please message the mods if you think I'm making a mistake!")
+                self.reply_to_comment(comment, "Thanks for the example, but only submissions that you posted yourself can be scored.")
                 return
             
             # Verify that the example isn't already being tracked
             if self.tracker.is_example_tracked(example_submission.id):
-                comment.reply("The example you provided is already being scored! ")
+                self.reply_to_comment(comment, "The example you provided is already being scored!")
                 return
 
             # Verify that the post isn't too old to be tracked
             cur_time = int(time.time())
             if cur_time > example_submission.created_utc + self.tracker.TRACK_DURATION_SECONDS:
-                comment.reply("The example you provided is too old for me to track the score!\n\n" + \
+                self.reply_to_comment(comment, "The example you provided is too old for me to track the score!\n\n" + \
                     "Only examples that were posted within the last 24 hours are valid.")
                 return
 
@@ -263,21 +232,19 @@ class ScoreboardFeature(Feature):
             # If the example passed all the verification, track it!
             # TODO - Update % with actual number
             parent_submission = comment.submission
-            comment.reply("Thank you for the example!\n\n\n\n" + \
+            self.reply_to_comment("Thank you for the example!\n\n\n\n" + \
                 "I'll check your post periodically over the next 24 hours and update your score. " + \
                 "A 20% commission will go to the creator of the meme template.")
             self.tracker.track_example(parent_submission, example_submission)
 
         except praw.exceptions.ClientException as e:
             print("Could not get submission from URL: " + example_url)
-            comment.reply("Thanks for the example, but I couldn't find any Reddit post " + \
-                "from the URL tht you provided. Only links to example posts on other subreddits can be scored.\n\n" + \
-                "\n\nI'm just a bot, so please message the mods if you think I'm making a mistake!")    
+            self.reply_to_comment(comment, "Thanks for the example, but I couldn't find any Reddit post " + \
+                "from the URL tht you provided. Only links to example posts on other subreddits can be scored.")
             return
 
         print("\n")
 
-        self.mark_item_processed(comment)
     ################## Helper functions ##################
     def is_user(self, author):
         """
@@ -291,3 +258,21 @@ class ScoreboardFeature(Feature):
         
         # If there is a match, then the author is already a user
         return num_matches > 0
+
+    def reply_to_comment(self, comment, reply):
+        """
+        Replies to the comment with the given reply
+        comment: The PRAW Comment object to reply to
+        reply: The string with which to reply
+        """
+
+        # Add footer
+        reply_with_footer = reply + "\n\n*InsiderMemeBot is in beta testing. Please message the mods if you think I'm making a mistake!*"
+
+        if not ScoreboardFeature.DEBUG_MODE_NO_COMMENT:
+            comment.reply(reply_with_footer)
+        else:
+            print("-" * 40)
+            print("Comment: " + comment.body)
+            print("Reply: " + reply_with_footer)
+            print("-" * 40)
