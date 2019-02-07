@@ -47,19 +47,22 @@ class ScoreboardFeature(Feature):
         
         # The score tracker
         self.tracker = Tracker(self.reddit, self.dynamodb)
-            
-    #def check_condition(self):
-    #    return True
-    
-    #def perform_action(self):
-    #    self.check_submissions()
-    #    self.check_comments()
-    
+                
     def process_submission(self, submission):
+        # The sticky reply to respond with
+        reply_str = ScoreboardFeature.NEW_SUBMISSION_REPLY
+
+        # Create an account for the user if they don't have one
+        if not self.is_user(submission.author):
+            self.create_new_user(submission.author)
+            
+            reply_str = reply_str + "\n\n\n\n*New user created for " + submission.author.name + "*"
         # Reply to the submission
         if not ScoreboardFeature.DEBUG_MODE_NO_COMMENT:
-            reply = submission.reply(ScoreboardFeature.NEW_SUBMISSION_REPLY)
+            reply = submission.reply(reply_str)
             reply.mod.distinguish(how='yes', sticky=True)
+
+
 
         # Track the submission for scoring
         self.tracker.track_submission(submission)
@@ -74,7 +77,7 @@ class ScoreboardFeature(Feature):
                 
             # Determine if the comment is an action
             if comment.body.strip() == "!new":
-                self.create_new_user(comment)
+                self.process_new(comment)
             elif comment.body.strip() == "!score":
                 self.process_score(comment)
             elif comment.body.strip().startswith("!example"):
@@ -82,38 +85,21 @@ class ScoreboardFeature(Feature):
                 
     
     ############# Process actions #############
-    def create_new_user(self, comment):
-        """
-        Creates a new user for the comment author
-        """
-        
+    
+    def process_new(self, comment):
         author = comment.author
         if self.is_user(author):
             # The user already has an account
             self.reply_to_comment(comment, "There is already an account for " + author.name)
             return
-            
-        # If we get here, then the user doesn't have an account already, so we create one
-        print("Creating user: " + str(author))
-        try:
-            response = self.user_table.put_item(
-                Item={
-                   'user_id' : author.id,
-                   'username' : author.name,
-                   'submission_score' : 0,
-                   'distribution_score' :0
-                }
-            )
-            
-            print("Create user succeeded:")
-            print(" Response: " + str(response))
-            
+
+        if self.create_new_user(author):
             # Respond to the comment that the account was created
-            self.reply_to_comment(comment, "New user registered for " + author.name + ". You have 0 points.")            
-        
-        except ClientError as e:
-            print(e.response['Error']['Message'])
-            
+            self.reply_to_comment(comment, "New user registered for " + author.name) 
+        else:
+            # Shouldn't happen, hopefully
+            self.reply_to_comment(comment, "Something went wrong, please try again!")
+
     def process_score(self, comment):
         """
         Update and report the score for the user
@@ -168,6 +154,11 @@ class ScoreboardFeature(Feature):
         Processes the "!example" command
         """
         print("Processing example: " + str(comment.body))
+
+        if not self.is_user(comment.author):
+            self.reply_to_comment(comment, "You don't have an account yet!\n\n" + \
+                "Reply with '!new' to create one.")
+            return
 
         url_matches = re.findall(r"https\:\/\/www\.[a-zA-Z0-9\.\/_\\]+", comment.body)
 
@@ -232,10 +223,12 @@ class ScoreboardFeature(Feature):
             # If the example passed all the verification, track it!
             # TODO - Update % with actual number
             parent_submission = comment.submission
-            self.reply_to_comment("Thank you for the example!\n\n\n\n" + \
+            self.reply_to_comment(comment, "Thank you for the example!\n\n\n\n" + \
                 "I'll check your post periodically over the next 24 hours and update your score. " + \
                 "A 20% commission will go to the creator of the meme template.")
             self.tracker.track_example(parent_submission, example_submission)
+
+            self.comment_on_example(parent_submission, example_submission)
 
         except praw.exceptions.ClientException as e:
             print("Could not get submission from URL: " + example_url)
@@ -246,6 +239,35 @@ class ScoreboardFeature(Feature):
         print("\n")
 
     ################## Helper functions ##################
+    def create_new_user(self, redditor):
+        """
+        Creates a new user for the comment author.
+        Returns True if successful, false otherwise
+
+        redditor: The Redditor instance to make a user for
+        """
+        
+        # If we get here, then the user doesn't have an account already, so we create one
+        print("Creating user: " + str(redditor))
+        try:
+            response = self.user_table.put_item(
+                Item={
+                   'user_id' : redditor.id,
+                   'username' : redditor.name,
+                   'submission_score' : 0,
+                   'distribution_score' :0
+                }
+            )
+            
+            print("Create user succeeded:")
+            print(" Response: " + str(response))
+
+            return True         
+        
+        except ClientError as e:
+            print(e.response['Error']['Message'])
+            return False
+
     def is_user(self, author):
         """
         Returns true if the author is already a user in the DynamoDB database.
@@ -276,3 +298,13 @@ class ScoreboardFeature(Feature):
             print("Comment: " + comment.body)
             print("Reply: " + reply_with_footer)
             print("-" * 40)
+
+    def comment_on_example(self, original, example):
+        """
+        Adds a comment to the example, with a reference to the template
+        original: The Submission of the original template
+        example:  The Submission of the posted example
+        """
+        reply = "This is an inside meme! See the [template](" + original.permalink + ") on r/InsiderMemeTrading.\n\n" + \
+                "*Beep boop beep! I'm a bot!*"
+        example.reply(reply)
