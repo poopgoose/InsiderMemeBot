@@ -81,6 +81,8 @@ class InsiderMemeBot:
                     for feature in self.features:
                         feature.process_submission(submission)
 
+                    self.mark_item_processed(submission)
+
 
                 # Get new comments
                 for comment in self.subreddit.comments(limit=10):
@@ -95,18 +97,13 @@ class InsiderMemeBot:
                     for feature in self.features:
                         feature.process_comment(comment)
 
+                    self.mark_item_processed(comment)
 
             except Exception as e:
                 print(e)
                 traceback.print_exc()    
 
             time.sleep(1)
-
-        #while True:
-        #    for feature in self.features:
-        #        if feature.check_condition():
-        #            feature.perform_action()
-
 
     ##################### Utility Functions #######################
     def mark_item_processed(self, item):

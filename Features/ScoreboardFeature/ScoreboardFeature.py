@@ -297,6 +297,9 @@ class ScoreboardFeature(Feature):
         original: The Submission of the original template
         example:  The Submission of the posted example
         """
-        reply = "This is an inside meme! See the [template](" + original.permalink + ") on r/InsiderMemeTrading.\n\n" + \
-                "*Beep boop beep! I'm a bot!*"
-        example.reply(reply)
+        pass
+
+        # TODO - Uncomment after beta test
+        #reply = "This is an inside meme! See the [template](" + original.permalink + ") on r/InsiderMemeTrading.\n\n" + \
+        #        "*Beep boop beep! I'm a bot!*"
+        #example.reply(reply)
