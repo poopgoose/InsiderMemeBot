@@ -31,6 +31,7 @@ class InsiderMemeBot:
         self.test_mode = test_mode
         self.subreddit_name = "InsiderMemeBot_Test" if test_mode else "InsiderMemeTrading"
         self.subreddit = self.reddit.subreddit(self.subreddit_name)
+        self.my_id = self.reddit.user.me().id
 
     
         # Store the IDs of the last 1000 comments that the feature has processed.
@@ -82,11 +83,11 @@ class InsiderMemeBot:
 
 
                 # Get new comments
-                for comment in self.subreddit.comments(limit=100):
+                for comment in self.subreddit.comments(limit=10):
                     if self.is_processed_recently(comment):
                         continue
                     # Ignore own comments, old comments, and comments already replied to
-                    elif comment.author.id == self.reddit.user.me().id or \
+                    elif comment.author.id == self.my_id or \
                     self.is_old(comment) or self.did_reply(comment):
                         self.mark_item_processed(comment)
                         continue
@@ -143,7 +144,7 @@ class InsiderMemeBot:
         Returns whether or not the given submission already contains a top-level comment by InsiderMemeBot
         """
         for comment in submission.comments:
-            if comment.author.id == self.reddit.user.me().id:
+            if comment.author.id == self.my_id:
                 # The comment was by this bot
                 print("Already responded to post: " + submission.title)
                 return True
