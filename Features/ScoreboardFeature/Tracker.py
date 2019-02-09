@@ -31,8 +31,6 @@ class Tracker:
         # The amount of the distributor's score that goes to the creator
         self.CREATOR_COMMISSION = 0.20
 
-        self.UPDATE_TRACKING_DB_INTERVAL = 1 * 30 # 1 minute
-
         # If debugging, use debug values
         if self.DEBUG:
             self.TRACK_DURATION_SECONDS = Debug.TRACK_DURATION_SECONDS
@@ -85,7 +83,8 @@ class Tracker:
                        'submission_id' : submission.id,
                        'expire_time' : decimal.Decimal(create_time + self.TRACK_DURATION_SECONDS),
                        'is_example' : False,
-                       'template_id' : " "
+                       'template_id' : " ",
+                       'distributor_id' : " "
                     }
                 )
             except Exception as e:
@@ -93,7 +92,8 @@ class Tracker:
                 print(e)
             
         
-    def track_example(self, template_submission, example_submission, update_database = True):
+    def track_example(self, template_submission, example_submission, 
+        distributor_user_id, update_database = True):
         """
         Adds a new example to be tracked
         template_submission: The submission of the original template. The user will get a % of the score from the 
@@ -109,7 +109,7 @@ class Tracker:
             "next_update" : cur_time + self.SCORE_UPDATE_INTERVAL,
             "expire_time" : create_time + self.TRACK_DURATION_SECONDS,
             "score" : example_submission.score,
-            "distributor_user_id" : example_submission.author.id,
+            "distributor_user_id" : distributor_user_id,
             "creator_user_id" : template_submission.author.id
         }
 
@@ -127,7 +127,8 @@ class Tracker:
                        'submission_id' : example_submission.id,
                        'expire_time' : decimal.Decimal(create_time + self.TRACK_DURATION_SECONDS),
                        'is_example' : True,
-                       'template_id' : template_submission.id
+                       'template_id' : template_submission.id,
+                       'distributor_id' : distributor_user_id
                     }
                 )
             except Exception as e:
@@ -179,6 +180,8 @@ class Tracker:
                 if cur_time >= tracking_dict["expire_time"]:
                     expired_example_ids.append(example_id)
 
+
+                print("updated_score: " + str(updated_score))
         # Remove any submissions and examples that have expired
         for submission_id in expired_submission_ids:
             self.untrack_submission(submission_id)
@@ -218,7 +221,9 @@ class Tracker:
         total_distribution_score = 0
         for example_id in self.example_tracking_dict:
             tracking_dict = self.example_tracking_dict[example_id]
+            print("Checking dict: " + str(tracking_dict) + "(user_id = " + user_id + ")")
             if tracking_dict["distributor_user_id"] == user_id:
+                print("User matched! " + user_id)
                 # Take out the commission for the content creator
                 total_distribution_score = total_distribution_score + \
                     int(round(tracking_dict["score"] * (1 - self.CREATOR_COMMISSION)))
@@ -300,9 +305,11 @@ class Tracker:
                     template_id = item['template_id']
                     example_submission = self.reddit.submission(id=submission_id)
                     template_submission = self.reddit.submission(id=template_id)
+                    distributor_id = item['distributor_id']
 
                     # No need to update the database if we're just reading from it
-                    self.track_example(template_submission, example_submission, update_database=False)
+                    self.track_example(template_submission, example_submission, 
+                        distributor_id, update_database=False)
                 
                 else:
                     submission = self.reddit.submission(id=submission_id)

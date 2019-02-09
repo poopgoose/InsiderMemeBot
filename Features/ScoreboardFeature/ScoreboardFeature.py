@@ -18,7 +18,7 @@ class ScoreboardFeature(Feature):
     DEBUG_MODE_NO_COMMENT = False
 
     # Allow any submission as an example
-    DEBUG_MODE_ALLOW_ALL_EXAMPLES = True
+    DEBUG_MODE_ALLOW_ALL_EXAMPLES = False
     
     # Text constants
     NEW_SUBMISSION_REPLY = "Thank you for posting your meme creation!\n\n" + \
@@ -34,6 +34,8 @@ class ScoreboardFeature(Feature):
                            "If your link leads anywhere that is NOT a subreddit or one of our approved websites, then the commment will automatically be" + \
                            "removed. This rule is to protect everyone's security.\n\n"
 
+
+
     def __init__(self, reddit, subreddit_name):
         super(ScoreboardFeature, self).__init__(reddit, subreddit_name) # Call super constructor
         
@@ -46,6 +48,8 @@ class ScoreboardFeature(Feature):
         
         # The score tracker
         self.tracker = Tracker(self.reddit, self.dynamodb) 
+
+        self.last_update = 0
                 
     def process_submission(self, submission):
         # The sticky reply to respond with
@@ -66,9 +70,7 @@ class ScoreboardFeature(Feature):
         # Track the submission for scoring
         self.tracker.track_submission(submission)
         print("New submission: " + str(submission.title))
-             
-        # Update the submissions being tracked
-        self.tracker.update_scores()      
+                
         
     def process_comment(self, comment):             
         # Determine if the comment is an action
@@ -222,7 +224,7 @@ class ScoreboardFeature(Feature):
             self.reply_to_comment(comment, "Thank you for the example!\n\n\n\n" + \
                 "I'll check your post periodically over the next 24 hours and update your score. " + \
                 "A 20% commission will go to the creator of the meme template.")
-            self.tracker.track_example(parent_submission, example_submission)
+            self.tracker.track_example(parent_submission, example_submission, comment.author.id)
 
             self.comment_on_example(parent_submission, example_submission)
 
@@ -307,3 +309,11 @@ class ScoreboardFeature(Feature):
         #reply = "This is an inside meme! See the [template](" + original.permalink + ") on r/InsiderMemeTrading.\n\n" + \
         #        "*Beep boop beep! I'm a bot!*"
         #example.reply(reply)
+
+    def update(self):
+        # Update the submissions being tracked
+        cur_time = int(time.time())
+        if cur_time >= self.last_update + self.tracker.SCORE_UPDATE_INTERVAL:
+            print("Update!")
+            self.tracker.update_scores()   
+            self.last_update = cur_time
