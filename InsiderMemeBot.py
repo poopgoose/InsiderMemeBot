@@ -32,8 +32,7 @@ class InsiderMemeBot:
         self.subreddit_name = "InsiderMemBot_Dev" if test_mode else "InsiderMemeTrading"
         self.subreddit = self.reddit.subreddit(self.subreddit_name)
         self.my_id = self.reddit.user.me().id
-
-    
+  
         # Store the IDs of the last 1000 comments that the feature has processed.
         # For efficiency the IDs are stored twice, in two different orders.
         # -  One set is a simple list that keeps the comments in the order they were processed, so that we can
@@ -65,8 +64,14 @@ class InsiderMemeBot:
 
         while True:
 
-            # Get new submissions and process them
+            
             try:
+
+                ### Perform any periodic updates ###
+                for feature in self.features:
+                    feature.update()
+
+                ### Get new submissions and process them ###
                 for submission in self.subreddit.new(limit=10):
                 
                     if self.is_processed_recently(submission):
@@ -84,7 +89,7 @@ class InsiderMemeBot:
                     self.mark_item_processed(submission)
 
 
-                # Get new comments
+                ### Get new comments and process them ###
                 for comment in self.subreddit.comments(limit=10):
                     if self.is_processed_recently(comment):
                         continue
