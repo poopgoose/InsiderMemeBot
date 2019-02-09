@@ -29,8 +29,9 @@ class Tracker:
         self.SCORE_UPDATE_INTERVAL =  1 * 60 # 1 minute
 
         # The amount of the distributor's score that goes to the creator
-        self.CREATOR_COMMISSION = 0.20  
+        self.CREATOR_COMMISSION = 0.20
 
+        self.UPDATE_TRACKING_DB_INTERVAL = 1 * 30 # 1 minute
 
         # If debugging, use debug values
         if self.DEBUG:
@@ -46,18 +47,25 @@ class Tracker:
         
         # The tables that we'll be using
         self.users_table = self.dynamodb.Table("Users")
-        self.submissions_table = self.dynamodb.Table("Submissions")
+        self.tracking_table = self.dynamodb.Table("Tracking")
+
+        # Loads any submissions being tracked from AWS DynamoDB.
+        # This is a failsafe: if the bot crashes and comes back up, it can
+        # read from the database to pick up where it left off
+        self.load_tracking_data()
+
         
-    def track_submission(self, submission):
+    def track_submission(self, submission, update_database = True):
         """
         Adds a new submission to be tracked
         submission: The PRAW Submission object
         """
+        cur_time = int(time.time())
         create_time = submission.created_utc
         
         # Create an entry in the submission_tracking_dict so we know when to update
         tracking_dict = {
-           "next_update" : create_time + self.SCORE_UPDATE_INTERVAL,
+           "next_update" : cur_time + self.SCORE_UPDATE_INTERVAL,
            "expire_time" : create_time + self.TRACK_DURATION_SECONDS,
            "score" : submission.score,
            "user_id" : submission.author.id
@@ -66,29 +74,66 @@ class Tracker:
         print("Tracking submission: " )
         print(tracking_dict)
         self.submission_tracking_dict[submission.id] = tracking_dict
+
+        if update_database:
+            """
+            Update the tracking table
+            """
+            try:
+                response = self.tracking_table.put_item(
+                    Item={
+                       'submission_id' : submission.id,
+                       'expire_time' : decimal.Decimal(create_time + self.TRACK_DURATION_SECONDS),
+                       'is_example' : False,
+                       'template_id' : " "
+                    }
+                )
+            except Exception as e:
+                print("Unable to add example to tracking database: " + submission.id)
+                print(e)
+            
         
-    def track_example(self, parent_submission, example_submission):
+    def track_example(self, template_submission, example_submission, update_database = True):
         """
         Adds a new example to be tracked
-        parent_submission: The submission that the comment is in. They will get a % of the score from the 
+        template_submission: The submission of the original template. The user will get a % of the score from the 
             distributed example.
 
         example_submission: The submission of the distributed example
         """
 
         # Create an entry in the example_tracking_dict so we know when to update
+        cur_time = int(time.time())
         create_time = example_submission.created_utc
         tracking_dict = {
-            "next_update" : create_time + self.SCORE_UPDATE_INTERVAL,
+            "next_update" : cur_time + self.SCORE_UPDATE_INTERVAL,
             "expire_time" : create_time + self.TRACK_DURATION_SECONDS,
             "score" : example_submission.score,
             "distributor_user_id" : example_submission.author.id,
-            "creator_user_id" : parent_submission.author.id
+            "creator_user_id" : template_submission.author.id
         }
 
         print("Tracking Example: " )
         print(tracking_dict)
         self.example_tracking_dict[example_submission.id] = tracking_dict
+
+        if update_database:
+            """
+            Update the tracking table
+            """
+            try:
+                response = self.tracking_table.put_item(
+                    Item={
+                       'submission_id' : example_submission.id,
+                       'expire_time' : decimal.Decimal(create_time + self.TRACK_DURATION_SECONDS),
+                       'is_example' : True,
+                       'template_id' : template_submission.id
+                    }
+                )
+            except Exception as e:
+                print("Unable to add example to tracking database: " + example_submission.id)
+                print(e)
+            
 
     def is_example_tracked(self, submission_id):
         """
@@ -190,8 +235,12 @@ class Tracker:
             response = self.users_table.update_item(
                 Key={'user_id' : tracking_dict["user_id"]},
                 UpdateExpression = "set submission_score = submission_score + :score",
-                ExpressionAttributeValues = {":score" : decimal.Decimal(tracking_dict["score"])}
-            )
+                ExpressionAttributeValues = {":score" : decimal.Decimal(tracking_dict["score"])})
+
+            # Remove from the tracking table
+            response = self.tracking_table.delete_item(
+                   Key={'submission_id' : submission_id})
+            
         except ClientError as e:
             print(e.response['Error']['Message'])
             traceback.print_exc()
@@ -225,8 +274,40 @@ class Tracker:
                 ExpressionAttributeValues = {":score" : decimal.Decimal(submission_score)}
             )
 
+            # Remove from the tracking table
+            response = self.tracking_table.delete_item(
+                   Key={'submission_id' : example_id})
+
         except ClientError as e:
             print(e.response['Error']['Message'])
             traceback.print_exc()
 
-            
+    def load_tracking_data(self):
+        """
+        Loads tracking data from the AWS Database. Only called once on initialize,
+        to pick up previously tracked posts in case the bot crashes and comes back up
+        """
+        try:
+            response = self.tracking_table.scan()
+            print("Retrieved tracking data!")
+
+            for item in response['Items']:
+                submission_id = item['submission_id']
+                expire_time = item['expire_time']
+                is_example = item['is_example']
+
+                if is_example:
+                    template_id = item['template_id']
+                    example_submission = self.reddit.submission(id=submission_id)
+                    template_submission = self.reddit.submission(id=template_id)
+
+                    # No need to update the database if we're just reading from it
+                    self.track_example(template_submission, example_submission, update_database=False)
+                
+                else:
+                    submission = self.reddit.submission(id=submission_id)
+                    self.track_submission(submission, update_database=False)
+
+        except Exception as e:
+            print("Could not load tracking  data!")
+            print(e)

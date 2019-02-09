@@ -16,6 +16,9 @@ class ScoreboardFeature(Feature):
     
     # When true, all comment replies will just be printed to stdout, instead of actually replying
     DEBUG_MODE_NO_COMMENT = False
+
+    # Allow any submission as an example
+    DEBUG_MODE_ALLOW_ALL_EXAMPLES = True
     
     # Text constants
     NEW_SUBMISSION_REPLY = "Thank you for posting your meme creation!\n\n" + \
@@ -42,7 +45,7 @@ class ScoreboardFeature(Feature):
         self.submissions_table = self.dynamodb.Table('Submissions')
         
         # The score tracker
-        self.tracker = Tracker(self.reddit, self.dynamodb)
+        self.tracker = Tracker(self.reddit, self.dynamodb) 
                 
     def process_submission(self, submission):
         # The sticky reply to respond with
@@ -193,23 +196,24 @@ class ScoreboardFeature(Feature):
             submission_id = praw.models.Submission.id_from_url(example_url)
             example_submission = self.reddit.submission(id=submission_id)
 
-            # Verify that the example was posted by the comment author
-            if(comment.author.id != example_submission.author.id):
-                print("Comment author mismatch!")
-                self.reply_to_comment(comment, "Thanks for the example, but only submissions that you posted yourself can be scored.")
-                return
-            
-            # Verify that the example isn't already being tracked
-            if self.tracker.is_example_tracked(example_submission.id):
-                self.reply_to_comment(comment, "The example you provided is already being scored!")
-                return
+            if not ScoreboardFeature.DEBUG_MODE_ALLOW_ALL_EXAMPLES:
+                # Verify that the example was posted by the comment author
+                if(comment.author.id != example_submission.author.id):
+                    print("Comment author mismatch!")
+                    self.reply_to_comment(comment, "Thanks for the example, but only submissions that you posted yourself can be scored.")
+                    return
+                
+                # Verify that the example isn't already being tracked
+                if self.tracker.is_example_tracked(example_submission.id):
+                    self.reply_to_comment(comment, "The example you provided is already being scored!")
+                    return
 
-            # Verify that the post isn't too old to be tracked
-            cur_time = int(time.time())
-            if cur_time > example_submission.created_utc + self.tracker.TRACK_DURATION_SECONDS:
-                self.reply_to_comment(comment, "The example you provided is too old for me to track the score!\n\n" + \
-                    "Only examples that were posted within the last 24 hours are valid.")
-                return
+                # Verify that the post isn't too old to be tracked
+                cur_time = int(time.time())
+                if cur_time > example_submission.created_utc + self.tracker.TRACK_DURATION_SECONDS:
+                    self.reply_to_comment(comment, "The example you provided is too old for me to track the score!\n\n" + \
+                        "Only examples that were posted within the last 24 hours are valid.")
+                    return
 
 
             # If the example passed all the verification, track it!

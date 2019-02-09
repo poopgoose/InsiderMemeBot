@@ -19,7 +19,7 @@ TEST_MODE = True
 #############################
 # When HEROKU is True, the bot will assume it is running on Heroku, and will attempt
 # to use the credentials that are stored in the Heroku configuration variables.
-HEROKU = True
+HEROKU = False
 
 ################################
 ##     HELPER FUNCTIONS       ##
