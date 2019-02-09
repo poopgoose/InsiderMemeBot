@@ -29,7 +29,7 @@ class InsiderMemeBot:
         self.test_mode = test_mode
         self.features = []
         self.test_mode = test_mode
-        self.subreddit_name = "InsiderMemBot_Dev" if test_mode else "InsiderMemeTrading"
+        self.subreddit_name = "InsiderMemeBot_Test" if test_mode else "InsiderMemeTrading"
         self.subreddit = self.reddit.subreddit(self.subreddit_name)
         self.my_id = self.reddit.user.me().id
   
