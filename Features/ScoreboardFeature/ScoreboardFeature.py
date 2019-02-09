@@ -17,7 +17,6 @@ class ScoreboardFeature(Feature):
     # When true, all comment replies will just be printed to stdout, instead of actually replying
     DEBUG_MODE_NO_COMMENT = False
     
-    
     # Text constants
     NEW_SUBMISSION_REPLY = "Thank you for posting your meme creation!\n\n" + \
                            "Distributors may reply to this comment with the command\n\n" + \
@@ -31,10 +30,7 @@ class ScoreboardFeature(Feature):
                            "Only links to cross-posts in other subreddits can be scored.\n\n " + \
                            "If your link leads anywhere that is NOT a subreddit or one of our approved websites, then the commment will automatically be" + \
                            "removed. This rule is to protect everyone's security.\n\n"
-           
-    
-    
-    
+
     def __init__(self, reddit, subreddit_name):
         super(ScoreboardFeature, self).__init__(reddit, subreddit_name) # Call super constructor
         
@@ -69,21 +65,17 @@ class ScoreboardFeature(Feature):
         print("New submission: " + str(submission.title))
              
         # Update the submissions being tracked
-        self.tracker.update_scores()        
-
+        self.tracker.update_scores()      
         
-    def process_comment(self, comment):
-        # Get the latest 100 comments
+    def process_comment(self, comment):             
+        # Determine if the comment is an action
+        if comment.body.strip() == "!new":
+            self.process_new(comment)
+        elif comment.body.strip() == "!score":
+            self.process_score(comment)
+        elif comment.body.strip().startswith("!example"):
+            self.process_example(comment)
                 
-            # Determine if the comment is an action
-            if comment.body.strip() == "!new":
-                self.process_new(comment)
-            elif comment.body.strip() == "!score":
-                self.process_score(comment)
-            elif comment.body.strip().startswith("!example"):
-                self.process_example(comment)
-                
-    
     ############# Process actions #############
     
     def process_new(self, comment):
@@ -305,6 +297,9 @@ class ScoreboardFeature(Feature):
         original: The Submission of the original template
         example:  The Submission of the posted example
         """
-        reply = "This is an inside meme! See the [template](" + original.permalink + ") on r/InsiderMemeTrading.\n\n" + \
-                "*Beep boop beep! I'm a bot!*"
-        example.reply(reply)
+        pass
+
+        # TODO - Uncomment after beta test
+        #reply = "This is an inside meme! See the [template](" + original.permalink + ") on r/InsiderMemeTrading.\n\n" + \
+        #        "*Beep boop beep! I'm a bot!*"
+        #example.reply(reply)
