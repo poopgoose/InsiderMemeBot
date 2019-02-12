@@ -285,6 +285,10 @@ class Tracker:
             response = self.tracking_table.delete_item(
                    Key={'submission_id' : example_id})
 
+        del self.example_tracking_dict[example_id]
+
+
+
         except ClientError as e:
             print(e.response['Error']['Message'])
             traceback.print_exc()
