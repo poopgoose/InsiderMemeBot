@@ -271,7 +271,7 @@ class Tracker:
             response = self.users_table.update_item(
                 Key={'user_id' : tracking_dict["distributor_user_id"]},
                 UpdateExpression = "set distribution_score = distribution_score + :score",
-                ExpressionAttributeValues = {":score" : decimal.Decimal(distribution_score)}
+                ExpressionAttributeValues = {":score" : decimal.Decimal(distributor_score)}
             )
 
             # The content creator
