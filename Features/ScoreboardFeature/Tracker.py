@@ -23,12 +23,10 @@ class Tracker:
         self.DEBUG = False
     
         # The duration, in seconds, for which to track each post
-        #self.TRACK_DURATION_SECONDS = 24 * 60 * 60 # 24 hours (in seconds)
-        self.TRACK_DURATION_SECONDS = 60
+        self.TRACK_DURATION_SECONDS = 24 * 60 * 60 # 24 hours (in seconds)
     
         # How often to check the submission to update the score
-        #self.SCORE_UPDATE_INTERVAL =  1 * 60 # 1 minute
-        self.SCORE_UPDATE_INTERVAL = 20
+        self.SCORE_UPDATE_INTERVAL =  1 * 60 # 1 minute
 
         # The amount of the distributor's score that goes to the creator
         self.CREATOR_COMMISSION = 0.20
