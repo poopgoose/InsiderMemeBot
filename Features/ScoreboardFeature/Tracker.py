@@ -278,7 +278,7 @@ class Tracker:
             response = self.users_table.update_item(
                 Key={'user_id' : tracking_dict["creator_user_id"]},
                 UpdateExpression = "set submission_score = submission_score + :score",
-                ExpressionAttributeValues = {":score" : decimal.Decimal(submission_score)}
+                ExpressionAttributeValues = {":score" : decimal.Decimal(creator_score)}
             )
 
             # Remove from the tracking table
