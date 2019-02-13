@@ -71,7 +71,13 @@ class ScoreboardFeature(Feature):
         print("New submission: " + str(submission.title))
                 
         
-    def process_comment(self, comment):             
+    def process_comment(self, comment):        
+
+        # Ignore any comment that isn't a direct reply to the top-level InsiderMemeBot comment
+        # for a submission
+        if not self.is_top_level_reply(comment):
+            pass
+
         # Determine if the comment is an action
         if comment.body.strip() == "!new":
             self.process_new(comment)
@@ -278,6 +284,28 @@ class ScoreboardFeature(Feature):
         
         # If there is a match, then the author is already a user
         return num_matches > 0
+
+    def is_top_level_reply(self, comment):
+        """
+        Returns true if this comment is a reply to the top-level InsiderMemeBot post
+        comment: The PRAW Comment instance
+        """
+
+        if "t3_" in comment.parent_id:
+            # 't3_' is prefixed to ID if it is a submission
+            return False
+        else:
+            parent = comment.parent()
+
+            if parent.author.id != self.reddit.user.me().id:
+                # The reply wasn't to InsiderMemeBot
+                return False
+            else:
+
+                if "t3_" not in parent.parent_id:
+                    return False
+        return True
+
 
     def reply_to_comment(self, comment, reply):
         """
