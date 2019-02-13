@@ -26,13 +26,12 @@ class ScoreboardFeature(Feature):
                            "\n\n" + \
                            "!example <link to example>\n\n" + \
                            "\n\n" + \
-                           "Additional text can follow the command if desired. Only examples that are direct replies to " + \
+                           "Only examples that are direct replies to " + \
                            "this comment will be processed.\n\n" + \
                            "\n\n" + \
                            "NOTE TO DISTRIBUTORS:\n\n" + \
                            "Only links to cross-posts in other subreddits can be scored.\n\n " + \
-                           "If your link leads anywhere that is NOT a subreddit or one of our approved websites, then the commment will automatically be" + \
-                           "removed. This rule is to protect everyone's security.\n\n"
+                           "Imgur examples are appreciated, but will not give you any points!\n\n"
 
 
 
@@ -162,7 +161,8 @@ class ScoreboardFeature(Feature):
         if url_matches is None or len(url_matches) == 0:
             print("Invalid example: " + comment.body)
             print("\n")
-            self.reply_to_comment(comment, "Thanks for the example, but I couldn't find a URL in your comment.")
+            self.reply_to_comment(comment, "Thanks for the example, but I couldn't find any Reddit post " + \
+                "from the URL tht you provided. Only links to example posts on other subreddits can be scored.")
             return
 
         # Remove duplicate submissions. This can happen if the actual hyperlink is used as the comment body 
@@ -287,7 +287,7 @@ class ScoreboardFeature(Feature):
         """
 
         # Add footer
-        reply_with_footer = reply + "\n\n*InsiderMemeBot is in beta testing. Please message the mods if you think I'm making a mistake!*"
+        reply_with_footer = reply + "\n\n*InsiderMemeBot v1.0*"
 
         if not ScoreboardFeature.DEBUG_MODE_NO_COMMENT:
             comment.reply(reply_with_footer)
