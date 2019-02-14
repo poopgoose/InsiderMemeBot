@@ -76,7 +76,7 @@ class ScoreboardFeature(Feature):
         # Ignore any comment that isn't a direct reply to the top-level InsiderMemeBot comment
         # for a submission
         if not self.is_top_level_reply(comment):
-            pass
+            return
 
         # Determine if the comment is an action
         if comment.body.strip() == "!new":
