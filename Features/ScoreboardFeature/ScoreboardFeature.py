@@ -19,7 +19,7 @@ class ScoreboardFeature(Feature):
                            "All bot commands must be *direct* replies to this comment. " + \
                            "\n\n" + \
                            "**TO DISTRIBUTE THIS TEMPLATE:**\n\n" + \
-                           "Reply with  `!example`, followed by a link to your example post. Only links to cross-posts in other subreddits can be scored. " + \
+                           "Reply with  `!example`, followed by a link to your example post. Only links to posts in other subreddits can be scored. " + \
                            "Imgur examples are appreciated, but will not give you any points!\n\n" + \
                            "**RULES FOR DISTRIBUTION:**\n\n" + \
                            "1. The link you provide after `!example` **MUST** be an actual example of the template. " + \
