@@ -12,7 +12,7 @@ import sys
 # verify behavior before staging on the real subreddit.
 # TEST_MODE should always be set to true until a feature has been tested and deemed complete.
 # When TEST_MODE is false, the bot will use r/InsiderMemeTrading.
-TEST_MODE = True
+TEST_MODE = False
 
 #############################
 ##       HEROKU FLAG       ##
