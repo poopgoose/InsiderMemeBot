@@ -67,8 +67,11 @@ class ScoreboardFeature(Feature):
         # Reply to the submission
         if not ScoreboardFeature.DEBUG_MODE_NO_COMMENT:
             reply = submission.reply(reply_str)
-            reply.mod.distinguish(how='yes', sticky=True)
-
+            try:
+                # Attempt to make post sticky if we have permissions to do so
+                reply.mod.distinguish(how='yes', sticky=True)
+            except Exception as e:
+                pass
 
 
         # Track the submission for scoring
