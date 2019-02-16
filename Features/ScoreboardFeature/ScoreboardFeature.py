@@ -26,7 +26,10 @@ class ScoreboardFeature(Feature):
                            "Links to unrelated content will be removed by the mods, and repeated offenses " + \
                            "may result in your score being reset to 0 or being banned from the subreddit.\n\n" + \
                            "2. Examples must be your own posts to be scored. Links to someone else's posts are okay, but they won't get you any points.\n\n" + \
-                           "3. Example posts must be less than 24 hours old to be scored." + \
+                           "3. Example posts must be less than 24 hours old to be scored.\n\n" + \
+                           "\n\n" + \
+                           "**If your post is not a template, it will be removed.** If you have a post based on an IMT template, " + \
+                           "you may be qualified to post it on r/IMTOriginals"
                            "\n\n^(InsiderMemeBot v1.0)"
 
 
