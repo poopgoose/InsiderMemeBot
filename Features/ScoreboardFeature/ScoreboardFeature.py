@@ -29,7 +29,7 @@ class ScoreboardFeature(Feature):
                            "3. Example posts must be less than 24 hours old to be scored.\n\n" + \
                            "\n\n" + \
                            "**If your post is not a template, it will be removed.** If you have a post based on an IMT template, " + \
-                           "you may be qualified to post it on r/IMTOriginals"
+                           "you may be qualified to post it on r/IMTOriginals" + \
                            "\n\n^(InsiderMemeBot v1.0)"
 
 
