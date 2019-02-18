@@ -8,6 +8,7 @@ from Features.ScoreboardFeature.Tracker import Tracker
 from Features.ScoreboardFeature import Debug
 import re
 import time
+from Utils.DataAccess import DataAccess
 
 class ScoreboardFeature(Feature):
     """
@@ -40,18 +41,14 @@ class ScoreboardFeature(Feature):
     DEBUG_MODE_ALLOW_ALL_EXAMPLES = False
     
 
-    def __init__(self, reddit, subreddit_name):
+    def __init__(self, reddit, subreddit_name, data_access):
         super(ScoreboardFeature, self).__init__(reddit, subreddit_name) # Call super constructor
         
-        # Initialize the Amazon Web Service DynamoDB.
-        # For this to work, the AWS credentials must be present on the system.
-        # This can be done by using "pip install awscli", and then running "aws configure"
-        self.dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
-        self.user_table = self.dynamodb.Table('Users')
-        self.submissions_table = self.dynamodb.Table('Submissions')
+        # Initialize the data access
+        self.data_access = data_access
         
         # The score tracker
-        self.tracker = Tracker(self.reddit, self.dynamodb) 
+        self.tracker = Tracker(self.reddit, self.data_access) 
 
         self.last_update = 0
                 
@@ -75,7 +72,7 @@ class ScoreboardFeature(Feature):
 
 
         # Track the submission for scoring
-        self.tracker.track_submission(submission)
+        # self.tracker.track_submission(submission)
         print("New submission: " + str(submission.title))
                 
         
@@ -89,10 +86,10 @@ class ScoreboardFeature(Feature):
         # Determine if the comment is an action
         if comment.body.strip() == "!new":
             self.process_new(comment)
-        elif comment.body.strip() == "!score":
-            self.process_score(comment)
-        elif comment.body.strip().startswith("!example"):
-            self.process_example(comment)
+        #elif comment.body.strip() == "!score":
+        #    self.process_score(comment)
+        #elif comment.body.strip().startswith("!example"):
+        #    self.process_example(comment)
                 
     ############# Process actions #############
     
@@ -263,24 +260,17 @@ class ScoreboardFeature(Feature):
         
         # If we get here, then the user doesn't have an account already, so we create one
         print("Creating user: " + str(redditor))
-        try:
-            response = self.user_table.put_item(
-                Item={
-                   'user_id' : redditor.id,
-                   'username' : redditor.name,
-                   'submission_score' : 0,
-                   'distribution_score' :0
-                }
-            )
-            
-            print("Create user succeeded:")
-            print(" Response: " + str(response))
 
-            return True         
-        
-        except ClientError as e:
-            print(e.response['Error']['Message'])
-            return False
+        new_user_item = {
+            'user_id' : redditor.id,
+            'username' : redditor.name,
+            'submission_score' : 0,
+            'distribution_score' :0
+        }
+        if self.data_access.put_item(DataAccess.Tables.USERS, new_user_item):
+            print("Created user: " + str(redditor))
+        else:
+            print("Failed to create user: " + str(redditor))
 
     def is_user(self, author):
         """
@@ -288,8 +278,7 @@ class ScoreboardFeature(Feature):
         """
         
         # Query the table to get any user with a user_id matching the author's id
-        response = self.user_table.query(
-            KeyConditionExpression=Key('user_id').eq(author.id))
+        response = self.data_access.query(DataAccess.Tables.USERS, Key('user_id').eq(author.id))
         num_matches = len(response['Items'])
         
         # If there is a match, then the author is already a user
