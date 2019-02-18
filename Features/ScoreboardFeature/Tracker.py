@@ -16,7 +16,7 @@ class Tracker:
     comments, and keeps track of the scores.
     """
     
-    def __init__(self, reddit, dynamodb):
+    def __init__(self, reddit, data_access):
 
         # Constants
         # Enables/Disables debug mode for SubmissionTracker
@@ -38,19 +38,19 @@ class Tracker:
 
         # Initialize the variables
         self.reddit = reddit
-        self.dynamodb = dynamodb
+        self.data_access = data_access
         self.last_update_time = 0 # The time the submissions were last checked (Unix Epoch Time)
         self.submission_tracking_dict = {}
         self.example_tracking_dict = {}
         
         # The tables that we'll be using
-        self.users_table = self.dynamodb.Table("Users")
-        self.tracking_table = self.dynamodb.Table("Tracking")
+        #self.users_table = self.dynamodb.Table("Users")
+        #self.tracking_table = self.dynamodb.Table("Tracking")
 
         # Loads any submissions being tracked from AWS DynamoDB.
         # This is a failsafe: if the bot crashes and comes back up, it can
         # read from the database to pick up where it left off
-        self.load_tracking_data()
+        # self.load_tracking_data()
 
         
     def track_submission(self, submission, update_database = True):
