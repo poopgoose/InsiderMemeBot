@@ -14,26 +14,31 @@ class ScoreboardFeature(Feature):
     A feature that keeps score for the subreddit users
     """
     
+    # Text constants
+    NEW_SUBMISSION_REPLY = "Thank you for posting your meme template!\n\n" + \
+                           "All bot commands must be *direct* replies to this comment. " + \
+                           "\n\n" + \
+                           "**TO DISTRIBUTE THIS TEMPLATE:**\n\n" + \
+                           "Reply with  `!example`, followed by a link to your example post. Only links to posts in other subreddits can be scored. " + \
+                           "Imgur examples are appreciated, but will not give you any points!\n\n" + \
+                           "**RULES FOR DISTRIBUTION:**\n\n" + \
+                           "1. The link you provide after `!example` **MUST** be an actual example of the template. " + \
+                           "Links to unrelated content will be removed by the mods, and repeated offenses " + \
+                           "may result in your score being reset to 0 or being banned from the subreddit.\n\n" + \
+                           "2. Examples must be your own posts to be scored. Links to someone else's posts are okay, but they won't get you any points.\n\n" + \
+                           "3. Example posts must be less than 24 hours old to be scored.\n\n" + \
+                           "\n\n" + \
+                           "**If your post is not a template, it will be removed.** If you have a post based on an IMT template, " + \
+                           "you may be qualified to post it on r/IMTOriginals" + \
+                           "\n\n^(InsiderMemeBot v1.0)"
+
+
     # When true, all comment replies will just be printed to stdout, instead of actually replying
     DEBUG_MODE_NO_COMMENT = False
 
     # Allow any submission as an example
     DEBUG_MODE_ALLOW_ALL_EXAMPLES = False
     
-    # Text constants
-    NEW_SUBMISSION_REPLY = "Thank you for posting your meme creation!\n\n" + \
-                           "Distributors may reply to this comment with the command\n\n" + \
-                           "\n\n" + \
-                           "!example <link to example>\n\n" + \
-                           "\n\n" + \
-                           "Only examples that are direct replies to " + \
-                           "this comment will be processed.\n\n" + \
-                           "\n\n" + \
-                           "NOTE TO DISTRIBUTORS:\n\n" + \
-                           "Only links to cross-posts in other subreddits can be scored.\n\n " + \
-                           "Imgur examples are appreciated, but will not give you any points!\n\n"
-
-
 
     def __init__(self, reddit, subreddit_name):
         super(ScoreboardFeature, self).__init__(reddit, subreddit_name) # Call super constructor
@@ -62,8 +67,11 @@ class ScoreboardFeature(Feature):
         # Reply to the submission
         if not ScoreboardFeature.DEBUG_MODE_NO_COMMENT:
             reply = submission.reply(reply_str)
-            reply.mod.distinguish(how='yes', sticky=True)
-
+            try:
+                # Attempt to make post sticky if we have permissions to do so
+                reply.mod.distinguish(how='yes', sticky=True)
+            except Exception as e:
+                pass
 
 
         # Track the submission for scoring
@@ -144,8 +152,10 @@ class ScoreboardFeature(Feature):
 
             # Respond to the comment that the account was created
             self.reply_to_comment(comment, "**Score for " + comment.author.name + ":**\n\n" + \
-                "  Submission:   " + str(total_submission_score) + "\n\n" + \
-                "  Distribution: " + str(total_distribution_score))
+                "  Your submission score is " + str(total_submission_score) + "\n\n" + \
+                "  Your distribution score is " + str(total_distribution_score) + "\n\n" + \
+                "**Total Score:      " + str(total_submission_score + total_distribution_score) + "**")
+
                         
         
         except ClientError as e:
@@ -315,7 +325,7 @@ class ScoreboardFeature(Feature):
         """
 
         # Add footer
-        reply_with_footer = reply + "\n\n*InsiderMemeBot v1.0*"
+        reply_with_footer = reply + "\n\n\n\n^(InsiderMemeBot v1.0)"
 
         if not ScoreboardFeature.DEBUG_MODE_NO_COMMENT:
             comment.reply(reply_with_footer)
