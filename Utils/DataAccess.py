@@ -35,15 +35,8 @@ class DataAccess:
         returns: True if successful, false otherwise 
         """
         try:
-            if table_id == DataAccess.Tables.USERS:
-                response = self.user_table.put_item(Item=item)
-            elif table_id == DataAccess.Tables.TRACKING:
-                response = self.tracking_table.put_item(Item=item)
-            else:
-                raise RuntimeError("Bad Table Id: " + str(table_id))
-
+            response = self.get_table(table_id).put_item(Item=item)
             return True
-
         except Exception as e:
             message = "Unable to add item to " + Tables.idToString(table_id) + " table:\n" + str(item)
             print(message)
@@ -59,20 +52,34 @@ class DataAccess:
         key_condition_expr: The KeyConditionExpression to query with
         """
         try:
-            if table_id == DataAccess.Tables.USERS:
-                response = self.user_table.query(KeyConditionExpression=key_condition_expr)
-                return response
-            elif table_id == DataAccess.Tables.TRACKING:
-                response = self.tracking_table.query(KeyConditionExpression=key_condition_expr)
-                return response
-            else:
-                raise RuntimeError("Bad Table Id: " + str(table_id))
+            return self.get_table(table_id).query(KeyConditionExpression=key_condition_expr)
         except Exception as e:
             message = "Unable to query table: " + Tables.idToString(table_id) + \
                 "table:\n" + "Key condition expr: " + str(key_condition_expr)
             print(message)
             print("Error: " + str(e))
-            traceback.print_exc()     
+            traceback.print_exc()
+
+    def scan(self, table_id):
+        """
+        Scans the AWS database
+        table_id: One of the IDs defined in the Tables subclass
+        """ 
+        try:
+            return self.get_table(table_id).scan()
+        except Exception as e:
+            message = "Unable to scan table: " + Tables.idToString(table_id)
+
+    
+    # Helper function
+    def get_table(self, table_id):
+        if table_id == DataAccess.Tables.USERS:
+            return self.user_table
+        elif table_id == DataAccess.Tables.TRACKING:
+            return self.tracking_table
+        else:
+            raise RuntimeError("Bad Table Id: " + str(table_id))
+
 
     class Tables:
         """

@@ -9,6 +9,7 @@ import decimal
 import time
 import collections
 import traceback
+from Utils.DataAccess import DataAccess
 
 class Tracker:
     """
@@ -42,15 +43,11 @@ class Tracker:
         self.last_update_time = 0 # The time the submissions were last checked (Unix Epoch Time)
         self.submission_tracking_dict = {}
         self.example_tracking_dict = {}
-        
-        # The tables that we'll be using
-        #self.users_table = self.dynamodb.Table("Users")
-        #self.tracking_table = self.dynamodb.Table("Tracking")
 
         # Loads any submissions being tracked from AWS DynamoDB.
         # This is a failsafe: if the bot crashes and comes back up, it can
         # read from the database to pick up where it left off
-        # self.load_tracking_data()
+        self.load_tracking_data()
 
         
     def track_submission(self, submission, update_database = True):
@@ -69,27 +66,26 @@ class Tracker:
            "user_id" : submission.author.id
         }
 
-        print("Tracking submission: " )
-        print(tracking_dict)
+        print("-" * 40)
+        print("Tracking submission")
+        print(str(submission.id) + ": " + str(tracking_dict))
         self.submission_tracking_dict[submission.id] = tracking_dict
+        print("-" * 40)
 
         if update_database:
             """
             Update the tracking table
             """
-            try:
-                response = self.tracking_table.put_item(
-                    Item={
-                       'submission_id' : submission.id,
-                       'expire_time' : decimal.Decimal(create_time + self.TRACK_DURATION_SECONDS),
-                       'is_example' : False,
-                       'template_id' : " ",
-                       'distributor_id' : " "
-                    }
-                )
-            except Exception as e:
+            item={
+               'submission_id' : submission.id,
+               'expire_time' : decimal.Decimal(create_time + self.TRACK_DURATION_SECONDS),
+               'is_example' : False,
+               'template_id' : " ",
+               'distributor_id' : " "
+            }
+            success = self.data_access.put_item(DataAccess.Tables.TRACKING, item)
+            if not success:
                 print("Unable to add example to tracking database: " + submission.id)
-                print(e)
             
         
     def track_example(self, template_submission, example_submission, 
@@ -295,8 +291,7 @@ class Tracker:
         to pick up previously tracked posts in case the bot crashes and comes back up
         """
         try:
-            response = self.tracking_table.scan()
-            print("Retrieved tracking data!")
+            response = self.data_access.scan(DataAccess.Tables.TRACKING)
 
             for item in response['Items']:
                 submission_id = item['submission_id']

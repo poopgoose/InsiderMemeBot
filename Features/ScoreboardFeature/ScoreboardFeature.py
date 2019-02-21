@@ -72,7 +72,7 @@ class ScoreboardFeature(Feature):
 
 
         # Track the submission for scoring
-        # self.tracker.track_submission(submission)
+        self.tracker.track_submission(submission)
         print("New submission: " + str(submission.title))
                 
         
