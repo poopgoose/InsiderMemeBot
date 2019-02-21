@@ -341,6 +341,6 @@ class ScoreboardFeature(Feature):
         # Update the submissions being tracked
         cur_time = int(time.time())
         if cur_time >= self.last_update + self.tracker.SCORE_UPDATE_INTERVAL:
-            print("Update!")
+            #print("Update!")
             self.tracker.update_scores()   
             self.last_update = cur_time
