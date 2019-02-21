@@ -303,19 +303,24 @@ class Tracker:
                 expire_time = item['expire_time']
                 is_example = item['is_example']
 
-                if is_example:
-                    template_id = item['template_id']
-                    example_submission = self.reddit.submission(id=submission_id)
-                    template_submission = self.reddit.submission(id=template_id)
-                    distributor_id = item['distributor_id']
+                try:
 
-                    # No need to update the database if we're just reading from it
-                    self.track_example(template_submission, example_submission, 
-                        distributor_id, update_database=False)
-                
-                else:
-                    submission = self.reddit.submission(id=submission_id)
-                    self.track_submission(submission, update_database=False)
+                    if is_example:
+                        template_id = item['template_id']
+                        example_submission = self.reddit.submission(id=submission_id)
+                        template_submission = self.reddit.submission(id=template_id)
+                        distributor_id = item['distributor_id']
+
+                        # No need to update the database if we're just reading from it
+                        self.track_example(template_submission, example_submission, 
+                            distributor_id, update_database=False)
+                    
+                    else:
+                        submission = self.reddit.submission(id=submission_id)
+                        self.track_submission(submission, update_database=False)
+                except Exception as e:
+                    print("Unable to load item: " + str(item))
+                    print(e)
 
         except Exception as e:
             print("Could not load tracking  data!")
