@@ -205,8 +205,6 @@ class Tracker:
                 total_submission_score = total_submission_score + \
                     int(round(tracking_dict["score"] * self.CREATOR_COMMISSION))
 
-
-        print("Score from tracked submissions: " + str(total_submission_score))
         return total_submission_score
 
     def get_tracking_example_score(self, user_id):

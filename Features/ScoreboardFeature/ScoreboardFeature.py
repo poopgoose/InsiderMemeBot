@@ -9,6 +9,7 @@ from Features.ScoreboardFeature import Debug
 import re
 import time
 from Utils.DataAccess import DataAccess
+import os
 
 class ScoreboardFeature(Feature):
     """
@@ -86,8 +87,8 @@ class ScoreboardFeature(Feature):
         # Determine if the comment is an action
         if comment.body.strip() == "!new":
             self.process_new(comment)
-        #elif comment.body.strip() == "!score":
-        #    self.process_score(comment)
+        elif comment.body.strip() == "!score":
+            self.process_score(comment)
         elif comment.body.strip().startswith("!example"):
             self.process_example(comment)
                 
@@ -113,12 +114,11 @@ class ScoreboardFeature(Feature):
         """
         
         ### Submission Score ###
-        try:
-            author_id = comment.author.id
-            response = self.user_table.query(
-                KeyConditionExpression=Key('user_id').eq(author_id)
-            )
-            print("Score query succeeded:")
+        author_id = comment.author.id
+        key_condition_expr = Key('user_id').eq(author_id)
+        response = self.data_access.query(DataAccess.Tables.USERS, key_condition_expr)
+
+        if response != None:                
 
             # If there isn't a user, then reply as such and return.
             if len(response['Items']) == 0:
@@ -152,11 +152,10 @@ class ScoreboardFeature(Feature):
                 "  Your submission score is " + str(total_submission_score) + "\n\n" + \
                 "  Your distribution score is " + str(total_distribution_score) + "\n\n" + \
                 "**Total Score:      " + str(total_submission_score + total_distribution_score) + "**")
-
-                        
-        
-        except ClientError as e:
-            print(e.response['Error']['Message'])
+        else:
+            print("!!!!! Could not get score!")
+            print("    Comment ID: " + str(comment.id))
+            print("    Author: " + str(author_id))
 
     def process_example(self, comment):
         """
@@ -314,15 +313,15 @@ class ScoreboardFeature(Feature):
         """
 
         # Add footer
-        reply_with_footer = reply + "\n\n\n\n^(InsiderMemeBot v1.0)"
+        reply_with_footer = reply + "\n\n\n\n^(InsiderMemeBot v1.1)"
 
         if not ScoreboardFeature.DEBUG_MODE_NO_COMMENT:
             comment.reply(reply_with_footer)
-        else:
-            print("-" * 40)
-            print("Comment: " + comment.body)
-            print("Reply: " + reply_with_footer)
-            print("-" * 40)
+        
+        print("-" * 40)
+        print("Comment: " + comment.body)
+        print("Reply: " + reply_with_footer)
+        print("-" * 40)
 
     def comment_on_example(self, original, example):
         """
@@ -330,17 +329,20 @@ class ScoreboardFeature(Feature):
         original: The Submission of the original template
         example:  The Submission of the posted example
         """
-        pass
 
-        # TODO - Uncomment after beta test
-        #reply = "This is an inside meme! See the [template](" + original.permalink + ") on r/InsiderMemeTrading.\n\n" + \
-        #        "*Beep boop beep! I'm a bot!*"
-        #example.reply(reply)
+        # This functionality should ONLY be activated in deployment, not beta testing.
+        reply = "[Template](" + original.permalink + ")"
+        if not os.environ['IMT_TEST_MODE']:
+            print("Replying to example: " + example.permalink)
+            example.reply(reply)
+        else:
+            # If we're in test mode, just print that we would be replying
+            print("[IMT_TEST]: Mock reply for example post: " + example.permalink)
+            print("[IMT_TEST]:    Reply: " + reply)
 
     def update(self):
         # Update the submissions being tracked
         cur_time = int(time.time())
         if cur_time >= self.last_update + self.tracker.SCORE_UPDATE_INTERVAL:
-            #print("Update!")
             self.tracker.update_scores()   
             self.last_update = cur_time
