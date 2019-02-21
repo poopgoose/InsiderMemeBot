@@ -88,8 +88,8 @@ class ScoreboardFeature(Feature):
             self.process_new(comment)
         #elif comment.body.strip() == "!score":
         #    self.process_score(comment)
-        #elif comment.body.strip().startswith("!example"):
-        #    self.process_example(comment)
+        elif comment.body.strip().startswith("!example"):
+            self.process_example(comment)
                 
     ############# Process actions #############
     
