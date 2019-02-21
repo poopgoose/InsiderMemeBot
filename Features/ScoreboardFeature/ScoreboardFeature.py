@@ -81,7 +81,7 @@ class ScoreboardFeature(Feature):
 
         # Ignore any comment that isn't a direct reply to the top-level InsiderMemeBot comment
         # for a submission
-        if not self.is_top_level_reply(comment):
+        if not self.is_direct_reply(comment):
             return
 
         # Determine if the comment is an action
@@ -283,26 +283,11 @@ class ScoreboardFeature(Feature):
         # If there is a match, then the author is already a user
         return num_matches > 0
 
-    def is_top_level_reply(self, comment):
+    def is_direct_reply(self, comment):
         """
-        Returns true if this comment is a reply to the top-level InsiderMemeBot post
-        comment: The PRAW Comment instance
+        Returns true if this comment is a direct reply to InsiderMemeBot
         """
-
-        if "t3_" in comment.parent_id:
-            # 't3_' is prefixed to ID if it is a submission
-            return False
-        else:
-            parent = comment.parent()
-
-            if parent.author.id != self.reddit.user.me().id:
-                # The reply wasn't to InsiderMemeBot
-                return False
-            else:
-
-                if "t3_" not in parent.parent_id:
-                    return False
-        return True
+        return comment.parent().author.id == self.reddit.user.me().id
 
 
     def reply_to_comment(self, comment, reply):
