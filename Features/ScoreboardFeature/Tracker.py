@@ -85,7 +85,7 @@ class Tracker:
             }
             success = self.data_access.put_item(DataAccess.Tables.TRACKING, item)
             if not success:
-                print("Unable to add example to tracking database: " + submission.id)
+                print("!!!!! Unable to add example to tracking database: " + submission.id)
             
         
     def track_example(self, template_submission, example_submission, 
@@ -109,27 +109,27 @@ class Tracker:
             "creator_user_id" : template_submission.author.id
         }
 
+        print("-" * 40)
         print("Tracking Example: " )
-        print(tracking_dict)
+        print(str(example_submission.id) + ": " + str(tracking_dict))
+        print("-" * 40)
+
         self.example_tracking_dict[example_submission.id] = tracking_dict
 
         if update_database:
             """
             Update the tracking table
             """
-            try:
-                response = self.tracking_table.put_item(
-                    Item={
-                       'submission_id' : example_submission.id,
-                       'expire_time' : decimal.Decimal(create_time + self.TRACK_DURATION_SECONDS),
-                       'is_example' : True,
-                       'template_id' : template_submission.id,
-                       'distributor_id' : distributor_user_id
+            item = {
+               'submission_id' : example_submission.id,
+               'expire_time' : decimal.Decimal(create_time + self.TRACK_DURATION_SECONDS),
+               'is_example' : True,
+               'template_id' : template_submission.id,
+               'distributor_id' : distributor_user_id
                     }
-                )
-            except Exception as e:
-                print("Unable to add example to tracking database: " + example_submission.id)
-                print(e)
+            success = self.data_access.put_item(DataAccess.Tables.TRACKING, item)
+            if not success:
+                print("!!!!! Unable to add example to tracking database: " + example_submission.id)    
             
 
     def is_example_tracked(self, submission_id):
@@ -177,7 +177,6 @@ class Tracker:
                     expired_example_ids.append(example_id)
 
 
-                #print("updated_score: " + str(updated_score))
         # Remove any submissions and examples that have expired
         for submission_id in expired_submission_ids:
             self.untrack_submission(submission_id)
@@ -227,28 +226,37 @@ class Tracker:
         return total_distribution_score
 
     def untrack_submission(self, submission_id):
+        print("-" * 40)
         print("Submission has expired: " + submission_id)
+
         tracking_dict = self.submission_tracking_dict[submission_id]
         print("Final score: " + str(tracking_dict["score"]))
         print("Adding score to user: " + tracking_dict["user_id"])
+        
         # Update the score for the user before we untrack
-        try:
-            response = self.users_table.update_item(
-                Key={'user_id' : tracking_dict["user_id"]},
-                UpdateExpression = "set submission_score = submission_score + :score",
-                ExpressionAttributeValues = {":score" : decimal.Decimal(tracking_dict["score"])})
+        user_key = {'user_id' : tracking_dict["user_id"]}
+        user_update_expr = "set submission_score = submission_score + :score"
+        user_expr_attrs = {":score" : decimal.Decimal(tracking_dict["score"])}
+        success = self.data_access.update_item(
+            DataAccess.Tables.USERS, user_key, user_update_expr, user_expr_attrs)
 
-            # Remove from the tracking table
-            response = self.tracking_table.delete_item(
-                   Key={'submission_id' : submission_id})
-            
-        except ClientError as e:
-            print(e.response['Error']['Message'])
-            traceback.print_exc()
+        if not success:
+            print("!!!!! Unable to update creator score!")
+            print("    User: " + str(tracking_dict["user_id"]))
+            print("    Score: " + str(tracking_dict["score"]))
 
+        # Remove from tracking database
+        success = self.data_access.delete_item(
+            DataAccess.Tables.TRACKING, {'submission_id' : submission_id})
+
+        if not success:
+            print("!!!!! Unable to delete item from tracking table!")
+            print("    submission_id: " + str(submission_id))
         del self.submission_tracking_dict[submission_id]
+        print("-" * 40)
 
     def untrack_example(self, example_id):
+        print("-" * 40)
         print("Example has expired: " + example_id)
         tracking_dict = self.example_tracking_dict[example_id]
         print("Final score: " + str(tracking_dict["score"]))
@@ -259,31 +267,40 @@ class Tracker:
         distributor_score = int(round(total_score * (1 - self.CREATOR_COMMISSION)))
         creator_score = int(round(total_score * self.CREATOR_COMMISSION))
 
-        # Update the scores
-        try:
-            # The distributor
-            response = self.users_table.update_item(
-                Key={'user_id' : tracking_dict["distributor_user_id"]},
-                UpdateExpression = "set distribution_score = distribution_score + :score",
-                ExpressionAttributeValues = {":score" : decimal.Decimal(distributor_score)}
-            )
+        ### Update the scores ###
 
-            # The content creator
-            response = self.users_table.update_item(
-                Key={'user_id' : tracking_dict["creator_user_id"]},
-                UpdateExpression = "set submission_score = submission_score + :score",
-                ExpressionAttributeValues = {":score" : decimal.Decimal(creator_score)}
-            )
+        # Distributor
+        distributor_key = {'user_id' : tracking_dict["distributor_user_id"]}
+        distributor_update_expr = "set distribution_score = distribution_score + :score"
+        distributor_expr_attrs = {":score" : decimal.Decimal(distributor_score)}
+        success = self.data_access.update_item(
+            DataAccess.Tables.USERS, distributor_key, distributor_update_expr, distributor_expr_attrs)
 
-            # Remove from the tracking table
-            response = self.tracking_table.delete_item(
-                   Key={'submission_id' : example_id})
+        if not success:
+            print("!!!!! Unable to update distributor score!")
+            print("    User: " + str(tracking_dict["distributor_user_id"]))
+            print("    Score: " + str(distributor_score))
 
-            del self.example_tracking_dict[example_id]
+        
+        # Content creator
+        creator_key = {'user_id' : tracking_dict["creator_user_id"]}
+        creator_update_expr = "set submission_score = submission_score + :score"
+        creator_expr_attrs = {":score" : decimal.Decimal(creator_score)}
+        success = self.data_access.update_item(
+            DataAccess.Tables.USERS, creator_key, creator_update_expr, creator_expr_attrs)
 
-        except ClientError as e:
-            print(e.response['Error']['Message'])
-            traceback.print_exc()
+        if not success:
+            print("!!!!! Unable to update creator score!")
+            print("    User: " + str(tracking_dict["creator_user_id"]))
+            print("    Score: " + str(creator_score))
+
+        # Remove from the tracking table
+        success = self.data_access.delete_item(DataAccess.Tables.TRACKING, {'submission_id' : example_id})
+        if not success:
+            print("!!!!! Unable to delete item from tracking table!")
+            print("    submission_id: " + str(submission_id))
+        del self.example_tracking_dict[example_id]
+        print("-" * 40)
 
     def load_tracking_data(self):
         """
