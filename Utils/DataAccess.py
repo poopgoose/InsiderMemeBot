@@ -107,6 +107,7 @@ class DataAccess:
             print(message)
             print("Error: " + str(e))
             traceback.print_exc()
+            return None
 
     def scan(self, table_id):
         """
