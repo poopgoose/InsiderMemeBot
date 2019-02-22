@@ -4,3 +4,4 @@ prawcore==1.0.0
 praw==6.0.0
 awscli==1.16.89
 sortedcontainers==2.1.0
+gitpython==2.1.11

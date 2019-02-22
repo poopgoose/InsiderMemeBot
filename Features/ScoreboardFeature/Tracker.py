@@ -9,6 +9,7 @@ import decimal
 import time
 import collections
 import traceback
+from Utils.DataAccess import DataAccess
 
 class Tracker:
     """
@@ -16,7 +17,7 @@ class Tracker:
     comments, and keeps track of the scores.
     """
     
-    def __init__(self, reddit, dynamodb):
+    def __init__(self, reddit, data_access):
 
         # Constants
         # Enables/Disables debug mode for SubmissionTracker
@@ -38,14 +39,10 @@ class Tracker:
 
         # Initialize the variables
         self.reddit = reddit
-        self.dynamodb = dynamodb
+        self.data_access = data_access
         self.last_update_time = 0 # The time the submissions were last checked (Unix Epoch Time)
         self.submission_tracking_dict = {}
         self.example_tracking_dict = {}
-        
-        # The tables that we'll be using
-        self.users_table = self.dynamodb.Table("Users")
-        self.tracking_table = self.dynamodb.Table("Tracking")
 
         # Loads any submissions being tracked from AWS DynamoDB.
         # This is a failsafe: if the bot crashes and comes back up, it can
@@ -53,10 +50,11 @@ class Tracker:
         self.load_tracking_data()
 
         
-    def track_submission(self, submission, update_database = True):
+    def track_submission(self, submission, bot_comment_id=None, update_database = True):
         """
         Adds a new submission to be tracked
         submission: The PRAW Submission object
+        bot_comment: The comment made by the bot that will be updated after the submission is scored
         """
         cur_time = int(time.time())
         create_time = submission.created_utc
@@ -66,40 +64,44 @@ class Tracker:
            "next_update" : cur_time + self.SCORE_UPDATE_INTERVAL,
            "expire_time" : create_time + self.TRACK_DURATION_SECONDS,
            "score" : submission.score,
-           "user_id" : submission.author.id
+           "user_id" : submission.author.id,
+           "bot_comment_id" : bot_comment_id
         }
 
-        print("Tracking submission: " )
-        print(tracking_dict)
+        print("-" * 40)
+        print("Tracking submission")
+        print(str(submission.id) + ": " + str(tracking_dict))
         self.submission_tracking_dict[submission.id] = tracking_dict
+        print("-" * 40)
 
         if update_database:
             """
             Update the tracking table
             """
-            try:
-                response = self.tracking_table.put_item(
-                    Item={
-                       'submission_id' : submission.id,
-                       'expire_time' : decimal.Decimal(create_time + self.TRACK_DURATION_SECONDS),
-                       'is_example' : False,
-                       'template_id' : " ",
-                       'distributor_id' : " "
-                    }
-                )
-            except Exception as e:
-                print("Unable to add example to tracking database: " + submission.id)
-                print(e)
+
+            item={
+               'submission_id' : submission.id,
+               'expire_time' : decimal.Decimal(create_time + self.TRACK_DURATION_SECONDS),
+               'is_example' : False,
+               'template_id' : " ",
+               'distributor_id' : " ",
+               'bot_comment_id' : bot_comment_id if bot_comment_id != None else " " 
+            }
+            success = self.data_access.put_item(DataAccess.Tables.TRACKING, item)
+            if not success:
+                print("!!!!! Unable to add example to tracking database: " + submission.id)
             
         
     def track_example(self, template_submission, example_submission, 
-        distributor_user_id, update_database = True):
+        distributor_user_id, bot_comment_id=None, update_database = True):
         """
         Adds a new example to be tracked
         template_submission: The submission of the original template. The user will get a % of the score from the 
             distributed example.
 
         example_submission: The submission of the distributed example
+        distributor_user_id: The user ID of the distributor
+        bot_comment: The comment of the bot that will be updated after the example is tracked
         """
 
         # Create an entry in the example_tracking_dict so we know when to update
@@ -110,30 +112,32 @@ class Tracker:
             "expire_time" : create_time + self.TRACK_DURATION_SECONDS,
             "score" : example_submission.score,
             "distributor_user_id" : distributor_user_id,
-            "creator_user_id" : template_submission.author.id
+            "creator_user_id" : template_submission.author.id,
+            "bot_comment_id" : bot_comment_id
         }
 
+        print("-" * 40)
         print("Tracking Example: " )
-        print(tracking_dict)
+        print(str(example_submission.id) + ": " + str(tracking_dict))
+        print("-" * 40)
+
         self.example_tracking_dict[example_submission.id] = tracking_dict
 
         if update_database:
             """
             Update the tracking table
             """
-            try:
-                response = self.tracking_table.put_item(
-                    Item={
-                       'submission_id' : example_submission.id,
-                       'expire_time' : decimal.Decimal(create_time + self.TRACK_DURATION_SECONDS),
-                       'is_example' : True,
-                       'template_id' : template_submission.id,
-                       'distributor_id' : distributor_user_id
+            item = {
+               'submission_id' : example_submission.id,
+               'expire_time' : decimal.Decimal(create_time + self.TRACK_DURATION_SECONDS),
+               'is_example' : True,
+               'template_id' : template_submission.id,
+               'distributor_id' : distributor_user_id,
+               'bot_comment_id' : bot_comment_id if bot_comment_id != None else " "
                     }
-                )
-            except Exception as e:
-                print("Unable to add example to tracking database: " + example_submission.id)
-                print(e)
+            success = self.data_access.put_item(DataAccess.Tables.TRACKING, item)
+            if not success:
+                print("!!!!! Unable to add example to tracking database: " + example_submission.id)    
             
 
     def is_example_tracked(self, submission_id):
@@ -181,7 +185,6 @@ class Tracker:
                     expired_example_ids.append(example_id)
 
 
-                print("updated_score: " + str(updated_score))
         # Remove any submissions and examples that have expired
         for submission_id in expired_submission_ids:
             self.untrack_submission(submission_id)
@@ -210,8 +213,6 @@ class Tracker:
                 total_submission_score = total_submission_score + \
                     int(round(tracking_dict["score"] * self.CREATOR_COMMISSION))
 
-
-        print("Score from tracked submissions: " + str(total_submission_score))
         return total_submission_score
 
     def get_tracking_example_score(self, user_id):
@@ -231,28 +232,54 @@ class Tracker:
         return total_distribution_score
 
     def untrack_submission(self, submission_id):
+        print("-" * 40)
         print("Submission has expired: " + submission_id)
+
         tracking_dict = self.submission_tracking_dict[submission_id]
         print("Final score: " + str(tracking_dict["score"]))
         print("Adding score to user: " + tracking_dict["user_id"])
+        
         # Update the score for the user before we untrack
-        try:
-            response = self.users_table.update_item(
-                Key={'user_id' : tracking_dict["user_id"]},
-                UpdateExpression = "set submission_score = submission_score + :score",
-                ExpressionAttributeValues = {":score" : decimal.Decimal(tracking_dict["score"])})
+        user_key = {'user_id' : tracking_dict["user_id"]}
+        user_update_expr = "set submission_score = submission_score + :score"
+        user_expr_attrs = {":score" : decimal.Decimal(tracking_dict["score"])}
+        success = self.data_access.update_item(
+            DataAccess.Tables.USERS, user_key, user_update_expr, user_expr_attrs)
 
-            # Remove from the tracking table
-            response = self.tracking_table.delete_item(
-                   Key={'submission_id' : submission_id})
-            
-        except ClientError as e:
-            print(e.response['Error']['Message'])
-            traceback.print_exc()
+        if not success:
+            print("!!!!! Unable to update creator score!")
+            print("    User: " + str(tracking_dict["user_id"]))
+            print("    Score: " + str(tracking_dict["score"]))
 
+        # Remove from tracking database
+        success = self.data_access.delete_item(
+            DataAccess.Tables.TRACKING, {'submission_id' : submission_id})
+
+        if not success:
+            print("!!!!! Unable to delete item from tracking table!")
+            print("    submission_id: " + str(submission_id))
         del self.submission_tracking_dict[submission_id]
+        print("-" * 40)
+
+        if tracking_dict['bot_comment_id'] != None:
+            # Update the bot comment
+            bot_comment = self.reddit.comment(id=tracking_dict['bot_comment_id'])
+
+            try:
+                edited_body = bot_comment.body + "\n\n" + \
+                    "**Update**\n\n" + \
+                    "Your template has finished scoring! You received **" + str(tracking_dict["score"]) + "** points.\n\n" + \
+                    "*This does not include points gained from example commissions. Commission scores will be reported in the comments beneath the examples.*"
+                bot_comment.edit(edited_body)
+
+            except Exception as e:
+                print("!!!!Unable to edit bot comment!")
+                print("    Comment ID: " + bot_comment.id)
+                print("    Error: " + str(e))
+        ######## Update the top-level comment by InsiderMemeBot ########
 
     def untrack_example(self, example_id):
+        print("-" * 40)
         print("Example has expired: " + example_id)
         tracking_dict = self.example_tracking_dict[example_id]
         print("Final score: " + str(tracking_dict["score"]))
@@ -263,31 +290,56 @@ class Tracker:
         distributor_score = int(round(total_score * (1 - self.CREATOR_COMMISSION)))
         creator_score = int(round(total_score * self.CREATOR_COMMISSION))
 
-        # Update the scores
-        try:
-            # The distributor
-            response = self.users_table.update_item(
-                Key={'user_id' : tracking_dict["distributor_user_id"]},
-                UpdateExpression = "set distribution_score = distribution_score + :score",
-                ExpressionAttributeValues = {":score" : decimal.Decimal(distributor_score)}
-            )
+        ### Update the scores ###
 
-            # The content creator
-            response = self.users_table.update_item(
-                Key={'user_id' : tracking_dict["creator_user_id"]},
-                UpdateExpression = "set submission_score = submission_score + :score",
-                ExpressionAttributeValues = {":score" : decimal.Decimal(creator_score)}
-            )
+        # Distributor
+        distributor_key = {'user_id' : tracking_dict["distributor_user_id"]}
+        distributor_update_expr = "set distribution_score = distribution_score + :score"
+        distributor_expr_attrs = {":score" : decimal.Decimal(distributor_score)}
+        success = self.data_access.update_item(
+            DataAccess.Tables.USERS, distributor_key, distributor_update_expr, distributor_expr_attrs)
 
-            # Remove from the tracking table
-            response = self.tracking_table.delete_item(
-                   Key={'submission_id' : example_id})
+        if not success:
+            print("!!!!! Unable to update distributor score!")
+            print("    User: " + str(tracking_dict["distributor_user_id"]))
+            print("    Score: " + str(distributor_score))
 
-            del self.example_tracking_dict[example_id]
+        
+        # Content creator
+        creator_key = {'user_id' : tracking_dict["creator_user_id"]}
+        creator_update_expr = "set submission_score = submission_score + :score"
+        creator_expr_attrs = {":score" : decimal.Decimal(creator_score)}
+        success = self.data_access.update_item(
+            DataAccess.Tables.USERS, creator_key, creator_update_expr, creator_expr_attrs)
 
-        except ClientError as e:
-            print(e.response['Error']['Message'])
-            traceback.print_exc()
+        if not success:
+            print("!!!!! Unable to update creator score!")
+            print("    User: " + str(tracking_dict["creator_user_id"]))
+            print("    Score: " + str(creator_score))
+
+        # Remove from the tracking table
+        success = self.data_access.delete_item(DataAccess.Tables.TRACKING, {'submission_id' : example_id})
+        if not success:
+            print("!!!!! Unable to delete item from tracking table!")
+            print("    submission_id: " + str(submission_id))
+        del self.example_tracking_dict[example_id]
+        print("-" * 40)
+
+        if tracking_dict['bot_comment_id'] != None:
+            # Update the bot comment
+            bot_comment = self.reddit.comment(id=tracking_dict['bot_comment_id'])
+
+            try:
+                edited_body = bot_comment.body + "\n\n" + \
+                    "**Update**\n\n" + \
+                    "Your example has finished scoring! It received a total of **" + str(total_score) + "** points.\n\n" + \
+                    "You received **" + str(distributor_score) + "** points, and **" + str(creator_score) + "** of the points went to the creator of the template."
+                bot_comment.edit(edited_body)
+                
+            except Exception as e:
+                print("!!!!Unable to edit bot comment!")
+                print("    Comment ID: " + bot_comment.id)
+                print("    Error: " + str(e))
 
     def load_tracking_data(self):
         """
@@ -295,28 +347,47 @@ class Tracker:
         to pick up previously tracked posts in case the bot crashes and comes back up
         """
         try:
-            response = self.tracking_table.scan()
-            print("Retrieved tracking data!")
+            response = self.data_access.scan(DataAccess.Tables.TRACKING)
 
             for item in response['Items']:
                 submission_id = item['submission_id']
                 expire_time = item['expire_time']
                 is_example = item['is_example']
 
-                if is_example:
-                    template_id = item['template_id']
-                    example_submission = self.reddit.submission(id=submission_id)
-                    template_submission = self.reddit.submission(id=template_id)
-                    distributor_id = item['distributor_id']
-
-                    # No need to update the database if we're just reading from it
-                    self.track_example(template_submission, example_submission, 
-                        distributor_id, update_database=False)
-                
+                if 'bot_comment_id' in item:
+                    bot_comment = item['bot_comment_id']
                 else:
-                    submission = self.reddit.submission(id=submission_id)
-                    self.track_submission(submission, update_database=False)
+                    bot_comment = None
+
+                try:
+
+                    if is_example:
+                        template_id = item['template_id']
+                        example_submission = self.reddit.submission(id=submission_id)
+                        template_submission = self.reddit.submission(id=template_id)
+                        distributor_id = item['distributor_id']
+
+                        # No need to update the database if we're just reading from it
+                        self.track_example(template_submission, example_submission, 
+                            distributor_id, bot_comment_id=bot_comment, update_database=False)
+                    
+                    else:
+                        submission = self.reddit.submission(id=submission_id)
+                        self.track_submission(submission, update_database=False)
+                except Exception as e:
+                    print("Unable to load item: " + str(item))
+                    print(e)
 
         except Exception as e:
             print("Could not load tracking  data!")
             print(e)
+
+        print("=" * 40)
+        print("LOADED TRACKING DATA:")
+        print("-" * 40)
+        print("example_tracking_dict:")
+        print(str(self.example_tracking_dict))
+        print("-" * 40)
+        print("submission_tracking_dict:")
+        print(str(self.submission_tracking_dict))
+        print("=" * 40)
