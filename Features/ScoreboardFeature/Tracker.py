@@ -333,7 +333,7 @@ class Tracker:
                 edited_body = bot_comment.body + "\n\n" + \
                     "**Update**\n\n" + \
                     "Your example has finished scoring! It received a total of **" + str(total_score) + "** points.\n\n" + \
-                    "You received ** " + str(distributor_score) + "** points, and **" + str(creator_score) + "** of the points went to the creator of the template."
+                    "You received **" + str(distributor_score) + "** points, and **" + str(creator_score) + "** of the points went to the creator of the template."
                 bot_comment.edit(edited_body)
                 
             except Exception as e:
