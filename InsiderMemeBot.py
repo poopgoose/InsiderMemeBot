@@ -12,6 +12,9 @@ import traceback
 from Features.ActivityTracker import ActivityTracker
 from Features.ScoreboardFeature.ScoreboardFeature import ScoreboardFeature
 
+from Utils.DataAccess import DataAccess
+import decimal
+
 class InsiderMemeBot:
 
     ID_STORE_LIMIT = 1000 # The number of recent comment/submission IDs stored by the feature
@@ -32,6 +35,12 @@ class InsiderMemeBot:
         self.subreddit_name = "InsiderMemeBot_Test" if test_mode else "InsiderMemeTrading"
         self.subreddit = self.reddit.subreddit(self.subreddit_name)
         self.my_id = self.reddit.user.me().id
+
+
+        print("User: " + self.reddit.user.me().name)
+        print("Subreddit: " + self.subreddit_name)
+
+        self.data_access = DataAccess(test_mode)
   
         # Store the IDs of the last 1000 comments that the feature has processed.
         # For efficiency the IDs are stored twice, in two different orders.
@@ -49,12 +58,24 @@ class InsiderMemeBot:
 
 
 
+        # DEBUGGING
+        response = self.data_access.put_item(DataAccess.Tables.TRACKING,
+            {
+               'submission_id' : "test",
+               'expire_time' : decimal.Decimal(0),
+               'is_example' : True,
+               'template_id' : "test",
+               'distributor_id' : "test"
+            })
+
+
+
     def init_features(self):
         """
         Initializes the list of Features that the bot will implement
         """
         #self.features.append(ActivityTracker(self.reddit, self.subreddit_name))
-        self.features.append(ScoreboardFeature(self.reddit, self.subreddit_name))
+        self.features.append(ScoreboardFeature(self.reddit, self.subreddit_name, self.data_access))
         
         
     def run(self):

@@ -8,51 +8,57 @@ from Features.ScoreboardFeature.Tracker import Tracker
 from Features.ScoreboardFeature import Debug
 import re
 import time
+from Utils.DataAccess import DataAccess
+import os
 
 class ScoreboardFeature(Feature):
     """
     A feature that keeps score for the subreddit users
     """
     
+    # Text constants
+    NEW_SUBMISSION_REPLY = "Thank you for posting your meme template!\n\n" + \
+                           "All bot commands must be *direct* replies to this comment. " + \
+                           "\n\n" + \
+                           "**TO DISTRIBUTE THIS TEMPLATE:**\n\n" + \
+                           "Reply with  `!example`, followed by a link to your example post. Only links to posts in other subreddits can be scored. " + \
+                           "Imgur examples are appreciated, but will not give you any points!\n\n" + \
+                           "**RULES FOR DISTRIBUTION:**\n\n" + \
+                           "1. The link you provide after `!example` **MUST** be an actual example of the template. " + \
+                           "Links to unrelated content will be removed by the mods, and repeated offenses " + \
+                           "may result in your score being reset to 0 or being banned from the subreddit.\n\n" + \
+                           "2. Examples must be your own posts to be scored. Links to someone else's posts are okay, but they won't get you any points.\n\n" + \
+                           "3. Example posts must be less than 24 hours old to be scored.\n\n" + \
+                           "\n\n" + \
+                           "**If your post is not a template, it will be removed.** If you have a post based on an IMT template, " + \
+                           "you may be qualified to post it on r/IMTOriginals\n\n\n\n" + \
+                           "[Join us on discord!](https://discordapp.com/invite/q3mtAmj)" + \
+                           "\n\n^(InsiderMemeBot v1.1)"
+
+
     # When true, all comment replies will just be printed to stdout, instead of actually replying
     DEBUG_MODE_NO_COMMENT = False
 
     # Allow any submission as an example
     DEBUG_MODE_ALLOW_ALL_EXAMPLES = False
     
-    # Text constants
-    NEW_SUBMISSION_REPLY = "Thank you for posting your meme creation!\n\n" + \
-                           "Distributors may reply to this comment with the command\n\n" + \
-                           "\n\n" + \
-                           "!example <link to example>\n\n" + \
-                           "\n\n" + \
-                           "Only examples that are direct replies to " + \
-                           "this comment will be processed.\n\n" + \
-                           "\n\n" + \
-                           "NOTE TO DISTRIBUTORS:\n\n" + \
-                           "Only links to cross-posts in other subreddits can be scored.\n\n " + \
-                           "Imgur examples are appreciated, but will not give you any points!\n\n"
 
-
-
-    def __init__(self, reddit, subreddit_name):
+    def __init__(self, reddit, subreddit_name, data_access):
         super(ScoreboardFeature, self).__init__(reddit, subreddit_name) # Call super constructor
         
-        # Initialize the Amazon Web Service DynamoDB.
-        # For this to work, the AWS credentials must be present on the system.
-        # This can be done by using "pip install awscli", and then running "aws configure"
-        self.dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
-        self.user_table = self.dynamodb.Table('Users')
-        self.submissions_table = self.dynamodb.Table('Submissions')
+        # Initialize the data access
+        self.data_access = data_access
         
         # The score tracker
-        self.tracker = Tracker(self.reddit, self.dynamodb) 
+        self.tracker = Tracker(self.reddit, self.data_access) 
 
         self.last_update = 0
                 
     def process_submission(self, submission):
         # The sticky reply to respond with
         reply_str = ScoreboardFeature.NEW_SUBMISSION_REPLY
+
+        bot_reply = None
 
         # Create an account for the user if they don't have one
         if not self.is_user(submission.author):
@@ -61,13 +67,16 @@ class ScoreboardFeature(Feature):
             reply_str = reply_str + "\n\n\n\n*New user created for " + submission.author.name + "*"
         # Reply to the submission
         if not ScoreboardFeature.DEBUG_MODE_NO_COMMENT:
-            reply = submission.reply(reply_str)
-            reply.mod.distinguish(how='yes', sticky=True)
-
+            bot_reply = submission.reply(reply_str)
+            try:
+                # Attempt to make post sticky if we have permissions to do so
+                bot_reply.mod.distinguish(how='yes', sticky=True)
+            except Exception as e:
+                pass
 
 
         # Track the submission for scoring
-        self.tracker.track_submission(submission)
+        self.tracker.track_submission(submission, bot_reply.id)
         print("New submission: " + str(submission.title))
                 
         
@@ -75,7 +84,7 @@ class ScoreboardFeature(Feature):
 
         # Ignore any comment that isn't a direct reply to the top-level InsiderMemeBot comment
         # for a submission
-        if not self.is_top_level_reply(comment):
+        if not self.is_direct_reply(comment):
             return
 
         # Determine if the comment is an action
@@ -108,12 +117,11 @@ class ScoreboardFeature(Feature):
         """
         
         ### Submission Score ###
-        try:
-            author_id = comment.author.id
-            response = self.user_table.query(
-                KeyConditionExpression=Key('user_id').eq(author_id)
-            )
-            print("Score query succeeded:")
+        author_id = comment.author.id
+        key_condition_expr = Key('user_id').eq(author_id)
+        response = self.data_access.query(DataAccess.Tables.USERS, key_condition_expr)
+
+        if response != None:                
 
             # If there isn't a user, then reply as such and return.
             if len(response['Items']) == 0:
@@ -144,12 +152,13 @@ class ScoreboardFeature(Feature):
 
             # Respond to the comment that the account was created
             self.reply_to_comment(comment, "**Score for " + comment.author.name + ":**\n\n" + \
-                "  Submission:   " + str(total_submission_score) + "\n\n" + \
-                "  Distribution: " + str(total_distribution_score))
-                        
-        
-        except ClientError as e:
-            print(e.response['Error']['Message'])
+                "  Your submission score is " + str(total_submission_score) + "\n\n" + \
+                "  Your distribution score is " + str(total_distribution_score) + "\n\n" + \
+                "**Total Score:      " + str(total_submission_score + total_distribution_score) + "**")
+        else:
+            print("!!!!! Could not get score!")
+            print("    Comment ID: " + str(comment.id))
+            print("    Author: " + str(author_id))
 
     def process_example(self, comment):
         """
@@ -225,12 +234,12 @@ class ScoreboardFeature(Feature):
 
 
             # If the example passed all the verification, track it!
-            # TODO - Update % with actual number
             parent_submission = comment.submission
-            self.reply_to_comment(comment, "Thank you for the example!\n\n\n\n" + \
-                "I'll check your post periodically over the next 24 hours and update your score. " + \
+            bot_reply = self.reply_to_comment(comment, "Thank you for the example!\n\n\n\n" + \
+                "I'll check your post periodically until the example is 24 hours old, and update your score. " + \
                 "A 20% commission will go to the creator of the meme template.")
-            self.tracker.track_example(parent_submission, example_submission, comment.author.id)
+
+            self.tracker.track_example(parent_submission, example_submission, comment.author.id, bot_reply.id)
 
             self.comment_on_example(parent_submission, example_submission)
 
@@ -253,24 +262,17 @@ class ScoreboardFeature(Feature):
         
         # If we get here, then the user doesn't have an account already, so we create one
         print("Creating user: " + str(redditor))
-        try:
-            response = self.user_table.put_item(
-                Item={
-                   'user_id' : redditor.id,
-                   'username' : redditor.name,
-                   'submission_score' : 0,
-                   'distribution_score' :0
-                }
-            )
-            
-            print("Create user succeeded:")
-            print(" Response: " + str(response))
 
-            return True         
-        
-        except ClientError as e:
-            print(e.response['Error']['Message'])
-            return False
+        new_user_item = {
+            'user_id' : redditor.id,
+            'username' : redditor.name,
+            'submission_score' : 0,
+            'distribution_score' :0
+        }
+        if self.data_access.put_item(DataAccess.Tables.USERS, new_user_item):
+            print("Created user: " + str(redditor))
+        else:
+            print("Failed to create user: " + str(redditor))
 
     def is_user(self, author):
         """
@@ -278,33 +280,17 @@ class ScoreboardFeature(Feature):
         """
         
         # Query the table to get any user with a user_id matching the author's id
-        response = self.user_table.query(
-            KeyConditionExpression=Key('user_id').eq(author.id))
+        response = self.data_access.query(DataAccess.Tables.USERS, Key('user_id').eq(author.id))
         num_matches = len(response['Items'])
         
         # If there is a match, then the author is already a user
         return num_matches > 0
 
-    def is_top_level_reply(self, comment):
+    def is_direct_reply(self, comment):
         """
-        Returns true if this comment is a reply to the top-level InsiderMemeBot post
-        comment: The PRAW Comment instance
+        Returns true if this comment is a direct reply to InsiderMemeBot
         """
-
-        if "t3_" in comment.parent_id:
-            # 't3_' is prefixed to ID if it is a submission
-            return False
-        else:
-            parent = comment.parent()
-
-            if parent.author.id != self.reddit.user.me().id:
-                # The reply wasn't to InsiderMemeBot
-                return False
-            else:
-
-                if "t3_" not in parent.parent_id:
-                    return False
-        return True
+        return comment.parent().author.id == self.reddit.user.me().id
 
 
     def reply_to_comment(self, comment, reply):
@@ -312,18 +298,25 @@ class ScoreboardFeature(Feature):
         Replies to the comment with the given reply
         comment: The PRAW Comment object to reply to
         reply: The string with which to reply
+
+        Returns the Comment made by the bot
         """
 
         # Add footer
-        reply_with_footer = reply + "\n\n*InsiderMemeBot v1.0*"
+        reply_with_footer = reply + "\n\n\n\n^(InsiderMemeBot v1.1)"
+
+        # The reply Comment made by the bot
+        bot_reply = None
 
         if not ScoreboardFeature.DEBUG_MODE_NO_COMMENT:
-            comment.reply(reply_with_footer)
-        else:
-            print("-" * 40)
-            print("Comment: " + comment.body)
-            print("Reply: " + reply_with_footer)
-            print("-" * 40)
+            bot_reply = comment.reply(reply_with_footer)
+        
+        print("-" * 40)
+        print("Comment: " + comment.body)
+        print("Reply: " + reply_with_footer)
+        print("-" * 40)
+
+        return bot_reply
 
     def comment_on_example(self, original, example):
         """
@@ -331,17 +324,20 @@ class ScoreboardFeature(Feature):
         original: The Submission of the original template
         example:  The Submission of the posted example
         """
-        pass
 
-        # TODO - Uncomment after beta test
-        #reply = "This is an inside meme! See the [template](" + original.permalink + ") on r/InsiderMemeTrading.\n\n" + \
-        #        "*Beep boop beep! I'm a bot!*"
-        #example.reply(reply)
+        # This functionality should ONLY be activated in deployment, not beta testing.
+        reply = "[Template](" + original.permalink + ")"
+        if not os.environ['IMT_TEST_MODE']:
+            print("Replying to example: " + example.permalink)
+            example.reply(reply)
+        else:
+            # If we're in test mode, just print that we would be replying
+            print("[IMT_TEST]: Mock reply for example post: " + example.permalink)
+            print("[IMT_TEST]:    Reply: " + reply)
 
     def update(self):
         # Update the submissions being tracked
         cur_time = int(time.time())
         if cur_time >= self.last_update + self.tracker.SCORE_UPDATE_INTERVAL:
-            print("Update!")
             self.tracker.update_scores()   
             self.last_update = cur_time
