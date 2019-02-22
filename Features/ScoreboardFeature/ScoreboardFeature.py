@@ -31,7 +31,8 @@ class ScoreboardFeature(Feature):
                            "3. Example posts must be less than 24 hours old to be scored.\n\n" + \
                            "\n\n" + \
                            "**If your post is not a template, it will be removed.** If you have a post based on an IMT template, " + \
-                           "you may be qualified to post it on r/IMTOriginals" + \
+                           "you may be qualified to post it on r/IMTOriginals\n\n\n\n" + \
+                           "[Join us on discord!](https://discordapp.com/invite/q3mtAmj)" + \
                            "\n\n^(InsiderMemeBot v1.1)"
 
 
@@ -235,7 +236,7 @@ class ScoreboardFeature(Feature):
             # If the example passed all the verification, track it!
             parent_submission = comment.submission
             bot_reply = self.reply_to_comment(comment, "Thank you for the example!\n\n\n\n" + \
-                "I'll check your post periodically over the next 24 hours and update your score. " + \
+                "I'll check your post periodically until the example is 24 hours old, and update your score. " + \
                 "A 20% commission will go to the creator of the meme template.")
 
             self.tracker.track_example(parent_submission, example_submission, comment.author.id, bot_reply.id)
