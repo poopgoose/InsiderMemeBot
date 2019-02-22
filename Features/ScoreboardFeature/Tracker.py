@@ -50,10 +50,11 @@ class Tracker:
         self.load_tracking_data()
 
         
-    def track_submission(self, submission, update_database = True):
+    def track_submission(self, submission, bot_comment_id=None, update_database = True):
         """
         Adds a new submission to be tracked
         submission: The PRAW Submission object
+        bot_comment: The comment made by the bot that will be updated after the submission is scored
         """
         cur_time = int(time.time())
         create_time = submission.created_utc
@@ -63,7 +64,8 @@ class Tracker:
            "next_update" : cur_time + self.SCORE_UPDATE_INTERVAL,
            "expire_time" : create_time + self.TRACK_DURATION_SECONDS,
            "score" : submission.score,
-           "user_id" : submission.author.id
+           "user_id" : submission.author.id,
+           "bot_comment_id" : bot_comment_id
         }
 
         print("-" * 40)
@@ -76,12 +78,14 @@ class Tracker:
             """
             Update the tracking table
             """
+
             item={
                'submission_id' : submission.id,
                'expire_time' : decimal.Decimal(create_time + self.TRACK_DURATION_SECONDS),
                'is_example' : False,
                'template_id' : " ",
-               'distributor_id' : " "
+               'distributor_id' : " ",
+               'bot_comment_id' : bot_comment_id if bot_comment_id != None else " " 
             }
             success = self.data_access.put_item(DataAccess.Tables.TRACKING, item)
             if not success:
@@ -89,13 +93,15 @@ class Tracker:
             
         
     def track_example(self, template_submission, example_submission, 
-        distributor_user_id, update_database = True):
+        distributor_user_id, bot_comment_id=None, update_database = True):
         """
         Adds a new example to be tracked
         template_submission: The submission of the original template. The user will get a % of the score from the 
             distributed example.
 
         example_submission: The submission of the distributed example
+        distributor_user_id: The user ID of the distributor
+        bot_comment: The comment of the bot that will be updated after the example is tracked
         """
 
         # Create an entry in the example_tracking_dict so we know when to update
@@ -106,7 +112,8 @@ class Tracker:
             "expire_time" : create_time + self.TRACK_DURATION_SECONDS,
             "score" : example_submission.score,
             "distributor_user_id" : distributor_user_id,
-            "creator_user_id" : template_submission.author.id
+            "creator_user_id" : template_submission.author.id,
+            "bot_comment_id" : bot_comment_id
         }
 
         print("-" * 40)
@@ -125,7 +132,8 @@ class Tracker:
                'expire_time' : decimal.Decimal(create_time + self.TRACK_DURATION_SECONDS),
                'is_example' : True,
                'template_id' : template_submission.id,
-               'distributor_id' : distributor_user_id
+               'distributor_id' : distributor_user_id,
+               'bot_comment_id' : bot_comment_id if bot_comment_id != None else " "
                     }
             success = self.data_access.put_item(DataAccess.Tables.TRACKING, item)
             if not success:
@@ -253,6 +261,23 @@ class Tracker:
         del self.submission_tracking_dict[submission_id]
         print("-" * 40)
 
+        if tracking_dict['bot_comment_id'] != None:
+            # Update the bot comment
+            bot_comment = self.reddit.comment(id=tracking_dict['bot_comment_id'])
+
+            try:
+                edited_body = bot_comment.body + "\n\n" + \
+                    "**Update**\n\n" + \
+                    "Your template has finished scoring! You received **" + str(tracking_dict["score"]) + "** points.\n\n" + \
+                    "*This does not include points gained from example commissions. Commission scores will be reported in the comments beneath the examples.*"
+                bot_comment.edit(edited_body)
+
+            except Exception as e:
+                print("!!!!Unable to edit bot comment!")
+                print("    Comment ID: " + bot_comment.id)
+                print("    Error: " + str(e))
+        ######## Update the top-level comment by InsiderMemeBot ########
+
     def untrack_example(self, example_id):
         print("-" * 40)
         print("Example has expired: " + example_id)
@@ -300,6 +325,22 @@ class Tracker:
         del self.example_tracking_dict[example_id]
         print("-" * 40)
 
+        if tracking_dict['bot_comment_id'] != None:
+            # Update the bot comment
+            bot_comment = self.reddit.comment(id=tracking_dict['bot_comment_id'])
+
+            try:
+                edited_body = bot_comment.body + "\n\n" + \
+                    "**Update**\n\n" + \
+                    "Your example has finished scoring! It received a total of **" + str(total_score) + "** points.\n\n" + \
+                    "You received ** " + str(distributor_score) + "** points, and **" + str(creator_score) + "** of the points went to the creator of the template."
+                bot_comment.edit(edited_body)
+                
+            except Exception as e:
+                print("!!!!Unable to edit bot comment!")
+                print("    Comment ID: " + bot_comment.id)
+                print("    Error: " + str(e))
+
     def load_tracking_data(self):
         """
         Loads tracking data from the AWS Database. Only called once on initialize,
@@ -313,6 +354,11 @@ class Tracker:
                 expire_time = item['expire_time']
                 is_example = item['is_example']
 
+                if 'bot_comment_id' in item:
+                    bot_comment = item['bot_comment_id']
+                else:
+                    bot_comment = None
+
                 try:
 
                     if is_example:
@@ -323,7 +369,7 @@ class Tracker:
 
                         # No need to update the database if we're just reading from it
                         self.track_example(template_submission, example_submission, 
-                            distributor_id, update_database=False)
+                            distributor_id, bot_comment_id=bot_comment, update_database=False)
                     
                     else:
                         submission = self.reddit.submission(id=submission_id)

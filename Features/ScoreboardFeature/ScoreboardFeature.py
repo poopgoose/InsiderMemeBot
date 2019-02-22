@@ -32,7 +32,7 @@ class ScoreboardFeature(Feature):
                            "\n\n" + \
                            "**If your post is not a template, it will be removed.** If you have a post based on an IMT template, " + \
                            "you may be qualified to post it on r/IMTOriginals" + \
-                           "\n\n^(InsiderMemeBot v1.0)"
+                           "\n\n^(InsiderMemeBot v1.1)"
 
 
     # When true, all comment replies will just be printed to stdout, instead of actually replying
@@ -57,6 +57,8 @@ class ScoreboardFeature(Feature):
         # The sticky reply to respond with
         reply_str = ScoreboardFeature.NEW_SUBMISSION_REPLY
 
+        bot_reply = None
+
         # Create an account for the user if they don't have one
         if not self.is_user(submission.author):
             self.create_new_user(submission.author)
@@ -64,16 +66,16 @@ class ScoreboardFeature(Feature):
             reply_str = reply_str + "\n\n\n\n*New user created for " + submission.author.name + "*"
         # Reply to the submission
         if not ScoreboardFeature.DEBUG_MODE_NO_COMMENT:
-            reply = submission.reply(reply_str)
+            bot_reply = submission.reply(reply_str)
             try:
                 # Attempt to make post sticky if we have permissions to do so
-                reply.mod.distinguish(how='yes', sticky=True)
+                bot_reply.mod.distinguish(how='yes', sticky=True)
             except Exception as e:
                 pass
 
 
         # Track the submission for scoring
-        self.tracker.track_submission(submission)
+        self.tracker.track_submission(submission, bot_reply.id)
         print("New submission: " + str(submission.title))
                 
         
@@ -231,12 +233,12 @@ class ScoreboardFeature(Feature):
 
 
             # If the example passed all the verification, track it!
-            # TODO - Update % with actual number
             parent_submission = comment.submission
-            self.reply_to_comment(comment, "Thank you for the example!\n\n\n\n" + \
+            bot_reply = self.reply_to_comment(comment, "Thank you for the example!\n\n\n\n" + \
                 "I'll check your post periodically over the next 24 hours and update your score. " + \
                 "A 20% commission will go to the creator of the meme template.")
-            self.tracker.track_example(parent_submission, example_submission, comment.author.id)
+
+            self.tracker.track_example(parent_submission, example_submission, comment.author.id, bot_reply.id)
 
             self.comment_on_example(parent_submission, example_submission)
 
@@ -295,18 +297,25 @@ class ScoreboardFeature(Feature):
         Replies to the comment with the given reply
         comment: The PRAW Comment object to reply to
         reply: The string with which to reply
+
+        Returns the Comment made by the bot
         """
 
         # Add footer
         reply_with_footer = reply + "\n\n\n\n^(InsiderMemeBot v1.1)"
 
+        # The reply Comment made by the bot
+        bot_reply = None
+
         if not ScoreboardFeature.DEBUG_MODE_NO_COMMENT:
-            comment.reply(reply_with_footer)
+            bot_reply = comment.reply(reply_with_footer)
         
         print("-" * 40)
         print("Comment: " + comment.body)
         print("Reply: " + reply_with_footer)
         print("-" * 40)
+
+        return bot_reply
 
     def comment_on_example(self, original, example):
         """
