@@ -271,8 +271,10 @@ class ScoreboardFeature(Feature):
         }
         if self.data_access.put_item(DataAccess.Tables.USERS, new_user_item):
             print("Created user: " + str(redditor))
+            return True
         else:
             print("Failed to create user: " + str(redditor))
+            return False
 
     def is_user(self, author):
         """
