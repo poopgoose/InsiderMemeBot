@@ -192,6 +192,9 @@ class Tracker:
         for example_id in expired_example_ids:
             self.untrack_example(example_id)
 
+        time_elapsed = int(time.time()) - cur_time
+        print("Time to update scores: " + str(time_elapsed))
+
 
     def get_tracking_submission_score(self, user_id):
         """
