@@ -18,37 +18,26 @@ class Tracker:
     """
     
     def __init__(self, reddit, data_access):
-
-        # Constants
-        # Enables/Disables debug mode for SubmissionTracker
-        self.DEBUG = False
     
         # The duration, in seconds, for which to track each post
         self.TRACK_DURATION_SECONDS = 24 * 60 * 60 # 24 hours (in seconds)
-    
-        # How often to check the submission to update the score
-        self.SCORE_UPDATE_INTERVAL =  1 * 60 # 1 minute
 
         # The amount of the distributor's score that goes to the creator
         self.CREATOR_COMMISSION = 0.20
 
-        # If debugging, use debug values
-        if self.DEBUG:
-            self.TRACK_DURATION_SECONDS = Debug.TRACK_DURATION_SECONDS
-            self.SCORE_UPDATE_INTERVAL = Debug.SCORE_UPDATE_INTERVAL
-
         # Initialize the variables
         self.reddit = reddit
         self.data_access = data_access
-        self.last_update_time = 0 # The time the submissions were last checked (Unix Epoch Time)
         self.submission_tracking_dict = {}
         self.example_tracking_dict = {}
+
+        # The update queue
+        self.update_queue = collections.deque()
 
         # Loads any submissions being tracked from AWS DynamoDB.
         # This is a failsafe: if the bot crashes and comes back up, it can
         # read from the database to pick up where it left off
         self.load_tracking_data()
-
         
     def track_submission(self, submission, bot_comment_id=None, update_database = True):
         """
@@ -61,17 +50,21 @@ class Tracker:
         
         # Create an entry in the submission_tracking_dict so we know when to update
         tracking_dict = {
-           "next_update" : cur_time + self.SCORE_UPDATE_INTERVAL,
            "expire_time" : create_time + self.TRACK_DURATION_SECONDS,
            "score" : submission.score,
            "user_id" : submission.author.id,
            "bot_comment_id" : bot_comment_id
         }
 
+        self.submission_tracking_dict[submission.id] = tracking_dict
+        
+        # Append ID to the right side of the update queue
+        # (Submission_ID, is_example = False))
+        self.update_queue.append((submission.id, False))
+
         print("-" * 40)
         print("Tracking submission")
         print(str(submission.id) + ": " + str(tracking_dict))
-        self.submission_tracking_dict[submission.id] = tracking_dict
         print("-" * 40)
 
         if update_database:
@@ -108,7 +101,6 @@ class Tracker:
         cur_time = int(time.time())
         create_time = example_submission.created_utc
         tracking_dict = {
-            "next_update" : cur_time + self.SCORE_UPDATE_INTERVAL,
             "expire_time" : create_time + self.TRACK_DURATION_SECONDS,
             "score" : example_submission.score,
             "distributor_user_id" : distributor_user_id,
@@ -122,6 +114,10 @@ class Tracker:
         print("-" * 40)
 
         self.example_tracking_dict[example_submission.id] = tracking_dict
+        
+        # Append ID to the right side of the update queue
+        # (Submission_ID, is_example = True))
+        self.update_queue.append((example_submission.id, True))
 
         if update_database:
             """
@@ -147,43 +143,49 @@ class Tracker:
         return submission_id in self.example_tracking_dict
 
 
-    def update_scores(self):
+    def update_scores(self, max_updates=5):
     
-        cur_time = int(time.time())
-        
-        # For each dictionary in the tracking dicts, update the score if the current time is >= the next update time.
-        # If any tracked submission/example has expired, add it to a list for removal.
+        print("Update queue:")
+        print(str(self.update_queue))
 
         expired_submission_ids = []
         expired_example_ids = []
 
-        for submission_id in self.submission_tracking_dict:
-            tracking_dict = self.submission_tracking_dict[submission_id]
-            
-            if cur_time >= tracking_dict["next_update"]:
-                submission = self.reddit.submission(submission_id)
-                updated_score = submission.score
-                tracking_dict["next_update"] = cur_time + self.SCORE_UPDATE_INTERVAL
-                tracking_dict["score"] = updated_score
+        if len(self.update_queue) == 0:
+            # Nothing to update, so just return
+            return
 
-                # If we have passed the expiration time, then remove the submission from tracking after this update
-                if cur_time >= tracking_dict["expire_time"]:
+        # Update the maximum number allowed at once, or all of them if the length of the queue
+        # is less than the maximum.
+        num_updates = min(max_updates, len(self.update_queue))
+        for i in range(0, num_updates):
+
+            update_item = self.update_queue.popleft()
+            submission_id = update_item[0]
+            is_example = update_item[1]
+
+            # Get the latest score from reddit
+            updated_score = self.reddit.submission(submission_id).score
+
+            # Get the tracking dict and update
+            if(is_example):
+                tracking_dict = self.example_tracking_dict[submission_id]
+            else:
+                tracking_dict = self.submission_tracking_dict[submission_id]
+
+            tracking_dict["score"] = updated_score
+
+            # See if it's time for the tracking to finish
+            cur_time = int(time.time())
+            if cur_time > tracking_dict["expire_time"]:
+                if(is_example):
+                    expired_example_ids.append(submission_id)
+                else:
                     expired_submission_ids.append(submission_id)
-             
-         # Examples
-        for example_id in self.example_tracking_dict:
-            tracking_dict = self.example_tracking_dict[example_id]
-
-            if cur_time >= tracking_dict["next_update"]:
-                example = self.reddit.submission(example_id)
-                updated_score = example.score
-                tracking_dict["next_update"] = cur_time + self.SCORE_UPDATE_INTERVAL
-                tracking_dict["score"] = updated_score
-
-                # If we have passed the expiration time, then remove the submission from tracking after this update
-                if cur_time >= tracking_dict["expire_time"]:
-                    expired_example_ids.append(example_id)
-
+            
+            else:
+                # Add item to the end of the queue to be updated again
+                self.update_queue.append(update_item)
 
         # Remove any submissions and examples that have expired
         for submission_id in expired_submission_ids:
@@ -191,10 +193,6 @@ class Tracker:
 
         for example_id in expired_example_ids:
             self.untrack_example(example_id)
-
-        time_elapsed = int(time.time()) - cur_time
-        print("Time to update scores: " + str(time_elapsed))
-
 
     def get_tracking_submission_score(self, user_id):
         """
@@ -279,7 +277,7 @@ class Tracker:
                 print("!!!!Unable to edit bot comment!")
                 print("    Comment ID: " + bot_comment.id)
                 print("    Error: " + str(e))
-        ######## Update the top-level comment by InsiderMemeBot ########
+
 
     def untrack_example(self, example_id):
         print("-" * 40)
@@ -344,6 +342,7 @@ class Tracker:
                 print("    Comment ID: " + bot_comment.id)
                 print("    Error: " + str(e))
 
+
     def load_tracking_data(self):
         """
         Loads tracking data from the AWS Database. Only called once on initialize,
@@ -376,10 +375,16 @@ class Tracker:
                     
                     else:
                         submission = self.reddit.submission(id=submission_id)
-                        self.track_submission(submission, update_database=False)
+                        if submission.author != None:
+                            self.track_submission(submission, update_database=False)
+                        else:
+                            # TODO - Remove post w/ deleted author from tracking database
+                            print("Author is none for post: " + str(submission))
+
                 except Exception as e:
                     print("Unable to load item: " + str(item))
                     print(e)
+                    traceback.print_exc()
 
         except Exception as e:
             print("Could not load tracking  data!")

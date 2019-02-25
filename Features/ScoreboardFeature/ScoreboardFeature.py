@@ -33,7 +33,7 @@ class ScoreboardFeature(Feature):
                            "**If your post is not a template, it will be removed.** If you have a post based on an IMT template, " + \
                            "you may be qualified to post it on r/IMTOriginals\n\n\n\n" + \
                            "[Join us on discord!](https://discordapp.com/invite/q3mtAmj)" + \
-                           "\n\n^(InsiderMemeBot v1.1)"
+                           "\n\n^(InsiderMemeBot v1.2)"
 
 
     # When true, all comment replies will just be printed to stdout, instead of actually replying
@@ -51,8 +51,6 @@ class ScoreboardFeature(Feature):
         
         # The score tracker
         self.tracker = Tracker(self.reddit, self.data_access) 
-
-        self.last_update = 0
                 
     def process_submission(self, submission):
         # The sticky reply to respond with
@@ -305,7 +303,7 @@ class ScoreboardFeature(Feature):
         """
 
         # Add footer
-        reply_with_footer = reply + "\n\n\n\n^(InsiderMemeBot v1.1)"
+        reply_with_footer = reply + "\n\n\n\n^(InsiderMemeBot v1.2)"
 
         # The reply Comment made by the bot
         bot_reply = None
@@ -329,7 +327,7 @@ class ScoreboardFeature(Feature):
 
         # This functionality should ONLY be activated in deployment, not beta testing.
         reply = "[Template](" + original.permalink + ")"
-        if not os.environ['IMT_TEST_MODE']:
+        if os.environ['IMT_TEST_MODE'] == "false":
             print("Replying to example: " + example.permalink)
             example.reply(reply)
         else:
@@ -339,7 +337,4 @@ class ScoreboardFeature(Feature):
 
     def update(self):
         # Update the submissions being tracked
-        cur_time = int(time.time())
-        if cur_time >= self.last_update + self.tracker.SCORE_UPDATE_INTERVAL:
-            self.tracker.update_scores()   
-            self.last_update = cur_time
+        self.tracker.update_scores(max_updates=5) 
