@@ -120,7 +120,7 @@ class InsiderMemeBot:
 
     ##################### Utility Functions #######################
 
-    def reply(self, item, reply, is_sticky=False):
+    def reply(self, item, reply, is_sticky=False, suppress_footer = False):
         """
         Replies to a comment with the given reply
         item: The PRAW Comment or Submission object to reply to
@@ -134,8 +134,11 @@ class InsiderMemeBot:
         """
 
         # Add footer
-        reply_with_footer = reply + "\n\n\n\n^(InsiderMemeBot v" + InsiderMemeBot.VERSION + ")"
-
+        if not suppress_footer:
+            reply_with_footer = reply + "\n\n\n\n^(InsiderMemeBot v" + InsiderMemeBot.VERSION + ")"
+        else:
+            reply_with_footer = reply
+            
         # The reply Comment made by the bot
         try:
             bot_reply = item.reply(reply_with_footer)
