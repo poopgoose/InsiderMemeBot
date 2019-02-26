@@ -281,7 +281,7 @@ class ScoreboardFeature(Feature):
         """
         Returns true if this comment is a direct reply to InsiderMemeBot
         """
-        return comment.parent().author.id == self.bot.reddit.user.me().id
+        return comment.parent().author != None and comment.parent().author.id == self.bot.reddit.user.me().id
 
     def comment_on_example(self, original, example):
         """
