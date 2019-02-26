@@ -36,7 +36,7 @@ class Tracker:
         # Loads any submissions being tracked from AWS DynamoDB.
         # This is a failsafe: if the bot crashes and comes back up, it can
         # read from the database to pick up where it left off
-        #self.load_tracking_data()
+        self.load_tracking_data()
         
     def track_submission(self, submission, bot_comment_id=None, update_database = True):
         """
@@ -143,7 +143,12 @@ class Tracker:
 
 
     def update_scores(self, max_updates=5):
-
+        """
+        Updates the scores in the tracking dictionary
+        max_updates: The maximum number of scores to update before returning.
+                     If too many scores are updated at once, it will prevent the bot from 
+                     replying to comments and new submissions in a timely manner
+        """
         expired_submission_ids = []
         expired_example_ids = []
 
@@ -219,9 +224,7 @@ class Tracker:
         total_distribution_score = 0
         for example_id in self.example_tracking_dict:
             tracking_dict = self.example_tracking_dict[example_id]
-            print("Checking dict: " + str(tracking_dict) + "(user_id = " + user_id + ")")
             if tracking_dict["distributor_user_id"] == user_id:
-                print("User matched! " + user_id)
                 # Take out the commission for the content creator
                 total_distribution_score = total_distribution_score + \
                     int(round(tracking_dict["score"] * (1 - self.CREATOR_COMMISSION)))
