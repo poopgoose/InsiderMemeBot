@@ -294,7 +294,7 @@ class ScoreboardFeature(Feature):
         reply = "[Template](" + original.permalink + ")"
         if not self.bot.test_mode:
             print("Replying to example: " + example.permalink)
-            self.bot.reply(example, reply)
+            self.bot.reply(example, reply, suppress_footer = True)
         else:
             # If we're in test mode, just print that we would be replying
             print("[IMT_TEST]: Mock reply for example post: " + example.permalink)
