@@ -377,8 +377,11 @@ class Tracker:
                         if submission.author != None:
                             self.track_submission(submission, update_database=False)
                         else:
-                            # TODO - Remove post w/ deleted author from tracking database
-                            print("Author is none for post: " + str(submission))
+                            print("Post deleted by author: " + str(submission))
+                            # Remove post from the database
+                            success = self.data_access.delete_item(DataAccess.Tables.TRACKING, {'submission_id' : submission_id})
+                            if not success:
+                                 print("!!!!! Unable to delete submission from tracking table!")
 
                 except Exception as e:
                     print("Unable to load item: " + str(item))

@@ -292,7 +292,7 @@ class ScoreboardFeature(Feature):
 
         # This functionality should ONLY be activated in deployment, not beta testing.
         reply = "[Template](" + original.permalink + ")"
-        if os.environ['IMT_TEST_MODE'] == "false":
+        if not self.bot.test_mode:
             print("Replying to example: " + example.permalink)
             self.bot.reply(example, reply)
         else:
