@@ -1,5 +1,4 @@
 from Features.Feature import Feature
-from Features.ScoreboardFeature import Debug
 import praw
 import boto3
 from botocore.exceptions import ClientError
@@ -37,7 +36,7 @@ class Tracker:
         # Loads any submissions being tracked from AWS DynamoDB.
         # This is a failsafe: if the bot crashes and comes back up, it can
         # read from the database to pick up where it left off
-        self.load_tracking_data()
+        #self.load_tracking_data()
         
     def track_submission(self, submission, bot_comment_id=None, update_database = True):
         """
@@ -144,9 +143,6 @@ class Tracker:
 
 
     def update_scores(self, max_updates=5):
-    
-        print("Update queue:")
-        print(str(self.update_queue))
 
         expired_submission_ids = []
         expired_example_ids = []

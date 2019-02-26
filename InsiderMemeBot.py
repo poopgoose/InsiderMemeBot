@@ -4,7 +4,8 @@
 #              each of which is executed in its own thread.
 
 from datetime import datetime, timedelta
-import praw
+from praw.models.reddit.submission import Submission
+from praw.models.reddit.comment import Comment
 from sortedcontainers import SortedSet
 import time
 import traceback
@@ -16,6 +17,8 @@ from Utils.DataAccess import DataAccess
 import decimal
 
 class InsiderMemeBot:
+
+    VERSION = "1.2" # The version of InsiderMemeBot
 
     ID_STORE_LIMIT = 1000 # The number of recent comment/submission IDs stored by the feature
 
@@ -56,26 +59,13 @@ class InsiderMemeBot:
         # Initialize the features
         self.init_features()
 
-
-
-        # DEBUGGING
-        response = self.data_access.put_item(DataAccess.Tables.TRACKING,
-            {
-               'submission_id' : "test",
-               'expire_time' : decimal.Decimal(0),
-               'is_example' : True,
-               'template_id' : "test",
-               'distributor_id' : "test"
-            })
-
-
+        print("Initialization Complete")
 
     def init_features(self):
         """
         Initializes the list of Features that the bot will implement
         """
-        #self.features.append(ActivityTracker(self.reddit, self.subreddit_name))
-        self.features.append(ScoreboardFeature(self.reddit, self.subreddit_name, self.data_access))
+        self.features.append(ScoreboardFeature(self))
         
         
     def run(self):
@@ -84,10 +74,7 @@ class InsiderMemeBot:
         """
 
         while True:
-
-            
             try:
-
                 ### Perform any periodic updates ###
                 for feature in self.features:
                     feature.update()
@@ -132,6 +119,43 @@ class InsiderMemeBot:
             time.sleep(1)
 
     ##################### Utility Functions #######################
+
+    def reply(self, item, reply, is_sticky=False):
+        """
+        Replies to a comment with the given reply
+        item: The PRAW Comment or Submission object to reply to
+        reply: The string with which to reply.
+
+        is_sticky: Whether or not the comment should be sticky. Only applicable if reply is a Submission
+        If item is a Comment, then the bot will directly reply to the comment.
+        If item is a Submission, then the bot will create a top-level comment.
+
+        Returns the Comment object made by the bot
+        """
+
+        # Add footer
+        reply_with_footer = reply + "\n\n\n\n^(InsiderMemeBot v" + InsiderMemeBot.VERSION + ")"
+
+        # The reply Comment made by the bot
+        try:
+            bot_reply = item.reply(reply_with_footer)
+            print("Responded to item: " + str(item))
+            print("Response: " + str(bot_reply))
+        except Exception as e:
+            print("Could not post reply!")
+            print("  Replying to: " + str(item))
+            print("  Response: " + str(reply))
+            print("Error: " + str(e))
+
+        try:
+            # Attempt to make post sticky if we have permissions to do so
+            bot_reply.mod.distinguish(how='yes', sticky=True)
+        except Exception as e:
+            print("Could not make post sticky!")
+            print(e)
+
+        return bot_reply
+
     def mark_item_processed(self, item):
         """ Marks that the item has been processed by the feature
         
@@ -169,9 +193,7 @@ class InsiderMemeBot:
         for comment in submission.comments:
             if comment.author.id == self.my_id:
                 # The comment was by this bot
-                print("Already responded to post: " + submission.title)
                 return True
-                
         return False
         
     def did_reply(self, comment):
@@ -184,7 +206,6 @@ class InsiderMemeBot:
         replies.replace_more(limit=None)
         for reply in replies:
             if reply.author.id == self.reddit.user.me().id:
-                print("Already replied to comment: " + comment.body + "(" + comment.author.name +")")
                 return True
         return False
         
@@ -197,4 +218,3 @@ class InsiderMemeBot:
             seconds=(datetime.now() - datetime.fromtimestamp(obj.created_utc)).total_seconds())
 
         return time_diff.seconds//60 > 10
-        #return time_diff.days >= 1
