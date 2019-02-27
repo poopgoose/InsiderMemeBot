@@ -34,6 +34,11 @@ class Tracker:
         """
         Begins the tracker
         """
+        print("*" * 40)
+        print("RUNNING TRACKER")
+        print("Tracking Database: " + str(self.data_access.tracking_table.name))
+        print("*" * 40)
+
         self.__load_tracking_data__()
 
     def __update__(self):
@@ -59,40 +64,16 @@ class Tracker:
         """
         Updates a single tracked item
         """
-
-        is_example = item['is_example']
-
-        if(is_example):
-            self.__update_example__(item)
-        else:
-            self.__update_submission__(item)
-
-    def __update_example__(self, example_item):
-        """
-        Updates an example
-        """
-        pass
-
-    def __update_submission__(self, item):
-        """
-        Updates a submission
-        """
+        begin_time = time.time()
 
         submission_id = item['submission_id']
         expire_time = decimal.Decimal(item['expire_time'])
-        bot_comment_id = " " if not 'bot_comment_id' in item else item['bot_comment_id']
         last_update = decimal.Decimal(0) if not 'last_update' in item else decimal.Decimal(item['last_update'])
 
         submission = self.reddit.submission(id=submission_id)
         new_score = decimal.Decimal(submission.score)
         update_time = decimal.Decimal(int(time.time()))
         author = '[None]' if submission.author == None else submission.author.name
-
-        print("Submission: " + submission_id + "  (" + submission.title + ")")
-        print("    Author: " + author)
-        print("    Update Time: " + str(update_time))
-        print("    Score: " + str(new_score))
-
 
         key = {'submission_id' : submission_id}
         update_expr = 'set last_update = :update, score = :score'
@@ -102,6 +83,17 @@ class Tracker:
         except Exception as e:
             print("Failed to update submission!")
             print(e)
+
+        end_time = time.time()
+        update_duration = round(end_time - begin_time, 2)
+
+        print("Submission: " + submission_id + "  (" + submission.title + ")")
+        print("    Author: " + author)
+        print("    Update Time: " + str(update_time))
+        print("    Score: " + str(new_score))
+        print("    Is Example: " + str(item['is_example']))
+        print("    Update Duration: " + str(update_duration) + " seconds")
+        print("-" * 40)
 
 
     def __load_tracking_data__(self):
@@ -123,7 +115,6 @@ class Tracker:
 
         end_time = int(time.time())
         time_elapsed = end_time - cur_time
-        print("Time to load data: " + str(time_elapsed) + " seconds")
 
 
     def __track_new_items__(self):
