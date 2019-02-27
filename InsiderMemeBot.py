@@ -150,12 +150,13 @@ class InsiderMemeBot:
             print("  Response: " + str(reply))
             print("Error: " + str(e))
 
-        try:
-            # Attempt to make post sticky if we have permissions to do so
-            bot_reply.mod.distinguish(how='yes', sticky=True)
-        except Exception as e:
-            print("Could not make post sticky!")
-            print(e)
+        if is_sticky:
+            try:
+                # Attempt to make post sticky if we have permissions to do so
+                bot_reply.mod.distinguish(how='yes', sticky=True)
+            except Exception as e:
+                print("Could not make post sticky!")
+                print(e)
 
         return bot_reply
 
