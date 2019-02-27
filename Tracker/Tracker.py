@@ -1,6 +1,7 @@
 import praw
 import time
 from Utils.DataAccess import DataAccess
+from boto3.dynamodb.conditions import Key
 import decimal
 
 class Tracker:
@@ -39,92 +40,88 @@ class Tracker:
         print("Tracking Database: " + str(self.data_access.tracking_table.name))
         print("*" * 40)
 
-        self.__load_tracking_data__()
-
     def __update__(self):
         """
         Updates the items being tracked
         """
         cur_time = int(time.time())
+        
+        # Get the items in the database being tracked
+        tracked_items = []
+        try:
+            response = self.data_access.scan(DataAccess.Tables.TRACKING)
+            for item in response['Items']:
+                tracked_items.append(item)
+        except Exception as e:
+            print("Could not load tracking  data!")
+            print(e)
+            return
 
-
-        self.__track_new_items__() # Track any new items that may have been added
-
-        for item in self.tracked_items:
+        for item in tracked_items:
             self.__update_item__(item)
-
-        self.__untrack_old_items__() # Untrack any expired items
 
         end_time = int(time.time())
         time_elapsed = end_time - cur_time
 
+        print("=" * 40)
         print("Update cycle time: " + str(time_elapsed) + " seconds" )
+        print("=" * 40)
 
     def __update_item__(self, item):
         """
         Updates a single tracked item
         """
         begin_time = time.time()
-
-        submission_id = item['submission_id']
-        expire_time = decimal.Decimal(item['expire_time'])
-        last_update = decimal.Decimal(0) if not 'last_update' in item else decimal.Decimal(item['last_update'])
-
-        submission = self.reddit.submission(id=submission_id)
-        new_score = decimal.Decimal(submission.score)
-        update_time = decimal.Decimal(int(time.time()))
-        author = '[None]' if submission.author == None else submission.author.name
-
-        key = {'submission_id' : submission_id}
-        update_expr = 'set last_update = :update, score = :score'
-        expr_vals = {':update' : update_time, ':score' : new_score}
         try:
-            response = self.data_access.update_item(DataAccess.Tables.TRACKING, key, update_expr, expr_vals)
+
+            if not 'expire_time' in item:
+                """
+                In the case that the tracker adds an item at the same time as one is removed by InsiderMemeBot, it is
+                possible that a remnant will remain, with only the "submission_id", "last_update", and "score" fields defined.
+
+                This check catches any such instance, as all non-deleted items will have the "expire_time" field defined.
+                If an entry without this field is found, it should simply be removed from the database since InsiderMemeBot is 
+                finished with it.
+                """
+                self.data_access.delete_item(DataAccess.Tables.TRACKING, {'submission_id' : item['submission_id']})
+                print("Removing invalid item: " + str(item))
+                return
+
+            submission_id = item['submission_id']
+            expire_time = decimal.Decimal(item['expire_time'])
+            last_update = decimal.Decimal(0) if not 'last_update' in item else decimal.Decimal(item['last_update'])
+
+            submission = self.reddit.submission(id=submission_id)
+            new_score = decimal.Decimal(submission.score)
+            update_time = decimal.Decimal(int(time.time()))
+            author = '[None]' if submission.author == None else submission.author.name
+
+            key = {'submission_id' : submission_id}
+            update_expr = 'set last_update = :update, score = :score'
+            expr_vals = {':update' : update_time, ':score' : new_score}
+
+            # Make sure the item still exists since we added it to the list of items to update.
+            # If it's been removed from the tracking database, then we don't need to update it anymore
+            key_condition_expr = Key('submission_id').eq(submission_id)
+            response = self.data_access.query(DataAccess.Tables.TRACKING, key_condition_expr)
+            item_exists = len(response['Items']) == 1
+
+            if item_exists:
+                self.data_access.update_item(DataAccess.Tables.TRACKING, key, update_expr, expr_vals)
+                end_time = time.time()
+                update_duration = round(end_time - begin_time, 2)
+
+                print("Submission: " + submission_id + "  (" + submission.title + ")")
+                print("    Author: " + author)
+                print("    Update Time: " + str(update_time))
+                print("    Score: " + str(new_score))
+                print("    Is Example: " + str(item['is_example']))
+                print("    Update Duration: " + str(update_duration) + " seconds")
+                print("-" * 40)
+            else:
+                print("Submission has been removed from tracking: " + str(submission_id))
         except Exception as e:
-            print("Failed to update submission!")
+            print("Failed to update submission: " + submission_id)
             print(e)
 
-        end_time = time.time()
-        update_duration = round(end_time - begin_time, 2)
 
-        print("Submission: " + submission_id + "  (" + submission.title + ")")
-        print("    Author: " + author)
-        print("    Update Time: " + str(update_time))
-        print("    Score: " + str(new_score))
-        print("    Is Example: " + str(item['is_example']))
-        print("    Update Duration: " + str(update_duration) + " seconds")
-        print("-" * 40)
-
-
-    def __load_tracking_data__(self):
-        """
-        Loads tracking data from the AWS Database. Only called once on initialize,
-        to pick up previously tracked posts in case the bot crashes and comes back up
-        """
-
-        cur_time = int(time.time())
-        try:
-            response = self.data_access.scan(DataAccess.Tables.TRACKING)
-
-            for item in response['Items']:
-                self.tracked_items.append(item)
-        except Exception as e:
-            print("Could not load tracking  data!")
-            print(e)
-            sys.exit(1)
-
-        end_time = int(time.time())
-        time_elapsed = end_time - cur_time
-
-
-    def __track_new_items__(self):
-        """
-        Helper function for finding new items and tracking them
-        """
-        pass # TODO
-
-    def __untrack_old_items__(self):
-        """
-        Helper function for untracking old items
-        """
-        pass # TODO
