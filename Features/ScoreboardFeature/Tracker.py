@@ -77,7 +77,10 @@ class Tracker:
                'is_example' : False,
                'template_id' : " ",
                'distributor_id' : " ",
-               'bot_comment_id' : bot_comment_id if bot_comment_id != None else " " 
+               'bot_comment_id' : bot_comment_id if bot_comment_id != None else " " ,
+               'last_update' : 0,
+               'author_id' : submission.author.id,
+               'template_author_id' : " "
             }
             success = self.data_access.put_item(DataAccess.Tables.TRACKING, item)
             if not success:
@@ -128,7 +131,10 @@ class Tracker:
                'is_example' : True,
                'template_id' : template_submission.id,
                'distributor_id' : distributor_user_id,
-               'bot_comment_id' : bot_comment_id if bot_comment_id != None else " "
+               'bot_comment_id' : bot_comment_id if bot_comment_id != None else " ",
+               'author_id' : distributor_user_id,
+               'template_author_id' : template_submission.author.id,
+               'score' : 0
                     }
             success = self.data_access.put_item(DataAccess.Tables.TRACKING, item)
             if not success:
