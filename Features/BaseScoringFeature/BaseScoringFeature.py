@@ -10,7 +10,7 @@ import time
 from Utils.DataAccess import DataAccess
 import os
 
-class ScoreboardFeature(Feature):
+class BaseScoringFeature(Feature):
     """
     A feature that keeps score for the subreddit users
     """
@@ -44,13 +44,13 @@ class ScoreboardFeature(Feature):
     
 
     def __init__(self, bot):
-        super(ScoreboardFeature, self).__init__(bot) # Call super constructor
+        super(BaseScoringFeature, self).__init__(bot) # Call super constructor
 
         self.last_expire_check = 0 # The last time that we checked for expired submissions
 
     def process_submission(self, submission):
         # The sticky reply to respond with
-        reply_str = ScoreboardFeature.NEW_SUBMISSION_REPLY
+        reply_str = BaseScoringFeature.NEW_SUBMISSION_REPLY
 
         bot_reply = None
 
@@ -66,7 +66,7 @@ class ScoreboardFeature(Feature):
         item={
             'submission_id' : submission.id,
             'author_id': submission.author.id,
-            'expire_time' : decimal.Decimal(submission.created_utc + ScoreboardFeature.TRACK_DURATION_SECONDS),
+            'expire_time' : decimal.Decimal(submission.created_utc + BaseScoringFeature.TRACK_DURATION_SECONDS),
             'is_example' : False,
             'template_id' : " ",
             'distributor_id' : " ",
@@ -368,7 +368,7 @@ class ScoreboardFeature(Feature):
     def update(self):
         # TODO - Check if any examples need to be deleted
         cur_time = int(time.time())
-        if cur_time - self.last_expire_check < ScoreboardFeature.CHECK_EXPIRED_INTERVAL:
+        if cur_time - self.last_expire_check < BaseScoringFeature.CHECK_EXPIRED_INTERVAL:
             # Not time to check yet, so just return
             return
 

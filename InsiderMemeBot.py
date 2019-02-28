@@ -11,7 +11,7 @@ import time
 import traceback
 
 from Features.ActivityTracker import ActivityTracker
-from Features.ScoreboardFeature.ScoreboardFeature import ScoreboardFeature
+from Features.BaseScoringFeature.BaseScoringFeature import BaseScoringFeature
 
 from Utils.DataAccess import DataAccess
 import decimal
@@ -65,7 +65,7 @@ class InsiderMemeBot:
         """
         Initializes the list of Features that the bot will implement
         """
-        self.features.append(ScoreboardFeature(self))
+        self.features.append(BaseScoringFeature(self))
         
         
     def run(self):
