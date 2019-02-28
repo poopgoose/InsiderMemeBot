@@ -18,11 +18,7 @@ class Tracker:
     
     def __init__(self, reddit, data_access):
     
-        # The duration, in seconds, for which to track each post
-        self.TRACK_DURATION_SECONDS = 24 * 60 * 60 # 24 hours (in seconds)
 
-        # The amount of the distributor's score that goes to the creator
-        self.CREATOR_COMMISSION = 0.20
 
         # Initialize the variables
         self.reddit = reddit
@@ -38,51 +34,6 @@ class Tracker:
         # read from the database to pick up where it left off
         self.load_tracking_data()
         
-    def track_submission(self, submission, bot_comment_id=None, update_database = True):
-        """
-        Adds a new submission to be tracked
-        submission: The PRAW Submission object
-        bot_comment: The comment made by the bot that will be updated after the submission is scored
-        """
-        cur_time = int(time.time())
-        create_time = submission.created_utc
-        
-        # Create an entry in the submission_tracking_dict so we know when to update
-        tracking_dict = {
-           "expire_time" : create_time + self.TRACK_DURATION_SECONDS,
-           "score" : submission.score,
-           "user_id" : submission.author.id,
-           "bot_comment_id" : bot_comment_id
-        }
-
-        self.submission_tracking_dict[submission.id] = tracking_dict
-        
-        # Append ID to the right side of the update queue
-        # (Submission_ID, is_example = False))
-        self.update_queue.append((submission.id, False))
-
-        print("-" * 40)
-        print("Tracking submission")
-        print(str(submission.id) + ": " + str(tracking_dict))
-        print("-" * 40)
-
-        if update_database:
-            """
-            Update the tracking table
-            """
-
-            item={
-               'submission_id' : submission.id,
-               'expire_time' : decimal.Decimal(create_time + self.TRACK_DURATION_SECONDS),
-               'is_example' : False,
-               'template_id' : " ",
-               'distributor_id' : " ",
-               'bot_comment_id' : bot_comment_id if bot_comment_id != None else " " 
-            }
-            success = self.data_access.put_item(DataAccess.Tables.TRACKING, item)
-            if not success:
-                print("!!!!! Unable to add example to tracking database: " + submission.id)
-            
         
     def track_example(self, template_submission, example_submission, 
         distributor_user_id, bot_comment_id=None, update_database = True):

@@ -1,10 +1,10 @@
 from Features.Feature import Feature
+import decimal
 import praw
 import boto3
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key
 import json
-from Features.ScoreboardFeature.Tracker import Tracker
 import re
 import time
 from Utils.DataAccess import DataAccess
@@ -15,7 +15,7 @@ class ScoreboardFeature(Feature):
     A feature that keeps score for the subreddit users
     """
     
-    # Text constants
+    ### Constants ###
     NEW_SUBMISSION_REPLY = "Thank you for posting your meme template!\n\n" + \
                            "All bot commands must be *direct* replies to this comment. " + \
                            "\n\n" + \
@@ -33,20 +33,15 @@ class ScoreboardFeature(Feature):
                            "you may be qualified to post it on r/IMTOriginals\n\n\n\n" + \
                            "[Join us on discord!](https://discordapp.com/invite/q3mtAmj)"
 
+    # The duration, in seconds, for which to track each post
+    TRACK_DURATION_SECONDS = 24 * 60 * 60 # 24 hours (in seconds)
 
-    # When true, all comment replies will just be printed to stdout, instead of actually replying
-    DEBUG_MODE_NO_COMMENT = False
-
-    # Allow any submission as an example
-    DEBUG_MODE_ALLOW_ALL_EXAMPLES = False
+    # The amount of the distributor's score that goes to the creator
+    CREATOR_COMMISSION = 0.20
     
 
     def __init__(self, bot):
         super(ScoreboardFeature, self).__init__(bot) # Call super constructor
-        
-        # The score tracker
-        self.tracker = Tracker(self.bot.reddit, self.bot.data_access) 
-                
 
     def process_submission(self, submission):
         # The sticky reply to respond with
@@ -56,17 +51,31 @@ class ScoreboardFeature(Feature):
 
         # Create an account for the user if they don't have one
         if not self.is_user(submission.author):
-            self.create_new_user(submission.author)
-            
+            self.create_new_user(submission.author)            
             reply_str = reply_str + "\n\n\n\n*New user created for " + submission.author.name + "*"
+        
         # Reply to the submission
-        if not ScoreboardFeature.DEBUG_MODE_NO_COMMENT:
-            bot_reply = self.bot.reply(submission, reply_str, is_sticky=True) #submission.reply(reply_str)
+        bot_reply = self.bot.reply(submission, reply_str, is_sticky=True) #submission.reply(reply_str)
 
+        # Add the submission to the Tracking Database for Tracker to pick up
+        item={
+            'submission_id' : submission.id,
+            'author_id': submission.author.id,
+            'expire_time' : decimal.Decimal(submission.created_utc + ScoreboardFeature.TRACK_DURATION_SECONDS),
+            'is_example' : False,
+            'template_id' : " ",
+            'distributor_id' : " ",
+            'bot_comment_id' : bot_reply.id,
+            'last_update' : 0,
+            'score' : 0
+            }
+        try:
+            self.bot.data_access.put_item(DataAccess.Tables.TRACKING, item)
+        except Exception as e:
+            print("!!!! Could not add submission for tracking! " + str(submission.id))
+            print(e)
 
-        # Track the submission for scoring
-        self.tracker.track_submission(submission, bot_reply.id)
-        print("New submission: " + str(submission.title))
+        print("Processed new submission: " + str(submission.title))
                 
         
     def process_comment(self, comment):        
@@ -104,71 +113,131 @@ class ScoreboardFeature(Feature):
         """
         Update and report the score for the user
         """
-        
-        ### Submission Score ###
-        author_id = comment.author.id
-        key_condition_expr = Key('user_id').eq(author_id)
-        response = self.bot.data_access.query(DataAccess.Tables.USERS, key_condition_expr)
 
-        if response != None:                
-
+        try:
+            author_id = comment.author.id
+            
+            ##############################################        
+            ### Get the score stored in the User table ###
+            ##############################################
+            key_condition_expr = Key('user_id').eq(author_id)
+            response = self.bot.data_access.query(DataAccess.Tables.USERS, key_condition_expr)
             # If there isn't a user, then reply as such and return.
             if len(response['Items']) == 0:
                 self.bot.reply(comment, "You don't have an account yet!\n\n" + \
                     "Reply with '!new' to create one.")
                 return
-
             user = response['Items'][0]
-           
-           ### Compute submission score ###
-            # The scores for any items that have already finished tracking
-            submission_score_from_db = user['submission_score']
+            submission_score_from_users = user['submission_score']
+            distribution_score_from_users = user['distribution_score']
 
-            # The scores for items that are currently being tracked
-            submission_score_from_tracking = \
-                self.tracker.get_tracking_submission_score(author_id)
+            ##########################################################
+            ### Add scores currently tracked in the Tracking table ###
+            ##########################################################
+            submission_score_from_tracking = 0
+            distribution_score_from_tracking = 0
+            response = self.bot.data_access.scan(DataAccess.Tables.TRACKING)
+            for item in response['Items']:
+                if item['author_id'] == author_id:
+                    if item['is_example']:
+                        distribution_score_from_tracking = distribution_score_from_tracking + int(item['score'])
+                    else:
+                        submission_score_from_tracking = submission_score_from_tracking + int(item['score'])
 
-            total_submission_score = submission_score_from_db + submission_score_from_tracking
-
-            ### Compute distribution score ###
-            distribution_score_from_db = user['distribution_score']
-            distribution_score_from_tracking = \
-                self.tracker.get_tracking_example_score(author_id)
-
-            total_distribution_score = distribution_score_from_db + distribution_score_from_tracking
-
-            # The scores for items that are 
+            ############################
+            ###  Report Total scores ###
+            ############################
+            total_submission_score = submission_score_from_users + submission_score_from_tracking
+            total_distribution_score = distribution_score_from_users + distribution_score_from_tracking 
 
             # Respond to the comment that the account was created
             self.bot.reply(comment, "**Score for " + comment.author.name + ":**\n\n" + \
                 "  Your submission score is " + str(total_submission_score) + "\n\n" + \
                 "  Your distribution score is " + str(total_distribution_score) + "\n\n" + \
                 "**Total Score:      " + str(total_submission_score + total_distribution_score) + "**")
-        else:
+        except Exception as e:
             print("!!!!! Could not get score!")
             print("    Comment ID: " + str(comment.id))
             print("    Author: " + str(author_id))
+            print("Error: " + str(e))
 
     def process_example(self, comment):
         """
         Processes the "!example" command
         """
         print("Processing example: " + str(comment.body))
-
-        if not self.is_user(comment.author):
-            self.bot.reply(comment, "You don't have an account yet!\n\n" + \
-                "Reply with '!new' to create one.")
+  
+        # Check to make sure the example is valid. If not, respond with the reason why it's invalid.
+        example_submission, validation_msg = self.__validate_example(comment)
+        if example_submission is None:
+            self.bot.reply(comment, validation_msg)
             return
 
-        url_matches = re.findall(r"https\:\/\/www\.[a-zA-Z0-9\.\/_\\]+", comment.body)
+        # At this point, we know that the example is valid
+        try:        
+            # Even if the example is valid, we need to check that the template submission itself hasn't been deleted
+            template_submission = comment.submission
+            if template_submission.author is None:
+                self.bot.reply(comment, "I cannot track examples for templates that have been deleted!")
+                return
 
-        if url_matches is None or len(url_matches) == 0:
-            print("Invalid example: " + comment.body)
-            print("\n")
+            # At this point, the example and the template are both valid.
+            bot_reply = self.bot.reply(comment, "Thank you for the example!\n\n\n\n" + \
+                "I'll check your post periodically until the example is 24 hours old, and update your score. " + \
+                "A 20% commission will go to the creator of the meme template.")
+
+            item = {
+               'submission_id' : example_submission.id,
+               'author_id' : comment.author.id,
+               'expire_time' : decimal.Decimal(example_submission.created_utc + self.TRACK_DURATION_SECONDS),
+               'is_example' : True,
+               'template_id' : template_submission.id,
+               'template_author_id' : template_submission.author.id,
+               'bot_comment_id' : bot_reply.id,
+               'last_update' : 0,
+               'score' : 0
+            }
+            success = self.bot.data_access.put_item(DataAccess.Tables.TRACKING, item)
+            if not success:
+                print("!!!!! Unable to add example to tracking database: " + example_submission.id)
+
+            self.comment_on_example(template_submission, example_submission)
+
+        except praw.exceptions.ClientException as e:
+            print("Could not get submission from URL: " + example_url)
             self.bot.reply(comment, "Thanks for the example, but I couldn't find any Reddit post " + \
                 "from the URL tht you provided. Only links to example posts on other subreddits can be scored.")
             return
 
+        print("\n")
+
+    def __validate_example(self, comment):
+        """
+        Helper method for process_comment.
+
+        Given the comment text, this function parses out the example URL, and determines if it's 
+        a valid example submission.
+
+        The function returns two values: (submission, msg)
+
+        If the exmaple is valid, then submission is the praw Submission object of the posted example.
+        If the example is invalid, then the submission is None, and "msg" is the string response to 
+        reply to the comment with, explaining why it's invalid. 
+        """
+
+        # First, check to see if teh submitter is a user
+        if not self.is_user(comment.author):
+            print("No account for user: " + str(comment.author.name))
+            return (None, "You don't have an account yet!\n\nReply with '!new' to create one.")
+
+        # Next, parse the example for URLs
+        url_matches = re.findall(r"https\:\/\/www\.[a-zA-Z0-9\.\/_\\]+", comment.body)
+
+        if url_matches is None or len(url_matches) == 0:
+            print("Invalid example: " + comment.body)
+            return (None, "Thanks for the example, but I couldn't find any Reddit post " + \
+                "from the URL tht you provided. Only links to example posts on other subreddits can be scored.")
+            
         # Remove duplicate submissions. This can happen if the actual hyperlink is used as the comment body 
         # TODO: This is a messy workaround. It would be better to use an HTML parser or something to grab
         # the actual URL from a link, and ignore the text itself.
@@ -189,8 +258,7 @@ class ScoreboardFeature(Feature):
                 
         if len(unique_urls) > 1:
             print("Invalid example: " + comment.body)
-            print("\n")
-            self.bot.reply(comment, "Thanks for the example, but there are too many URLS in your comment.\n\n" + \
+            return (None, "Thanks for the example, but there are too many URLS in your comment.\n\n" + \
                "Please only include one link per example, so I can score it properly.")
             return
 
@@ -198,48 +266,40 @@ class ScoreboardFeature(Feature):
         example_url = unique_urls[0]
 
         try:
-            # Try to get the example submission, and track it
+            # Try to get the example submission
             submission_id = praw.models.Submission.id_from_url(example_url)
-            example_submission = self.bot.reddit.submission(id=submission_id)
+            submission = self.bot.reddit.submission(id=submission_id)
 
-            if not ScoreboardFeature.DEBUG_MODE_ALLOW_ALL_EXAMPLES:
-                # Verify that the example was posted by the comment author
-                if(comment.author.id != example_submission.author.id):
-                    print("Comment author mismatch!")
-                    self.bot.reply(comment, "Thanks for the example, but only submissions that you posted yourself can be scored.")
-                    return
+            if submission.author is None:
+                print("Submission has been deleted: " + str(submission))
+                return(None, "The example that you posted has been deleted, so I cannot track it!")
+
+             # Verify that the example was posted by the comment author
+            if(comment.author.id != submission.author.id):
+                print("Comment author mismatch!")
+                return(None, "Thanks for the example, but only submissions that you posted yourself can be scored.")
+                            
+            # Verify that the example isn't already being tracked
+            response = self.bot.data_access.query(DataAccess.Tables.TRACKING, Key('submission_id').eq(submission_id))
+            for item in response['Items']:
+                if item['is_example'] == True:
+                    return(None, "The example you provided is already being scored!")
                 
-                # Verify that the example isn't already being tracked
-                if self.tracker.is_example_tracked(example_submission.id):
-                    self.bot.reply(comment, "The example you provided is already being scored!")
-                    return
-
-                # Verify that the post isn't too old to be tracked
-                cur_time = int(time.time())
-                if cur_time > example_submission.created_utc + self.tracker.TRACK_DURATION_SECONDS:
-                    self.bot.reply(comment, "The example you provided is too old for me to track the score!\n\n" + \
-                        "Only examples that were posted within the last 24 hours are valid.")
-                    return
-
-
-            # If the example passed all the verification, track it!
-            parent_submission = comment.submission
-            bot_reply = self.bot.reply(comment, "Thank you for the example!\n\n\n\n" + \
-                "I'll check your post periodically until the example is 24 hours old, and update your score. " + \
-                "A 20% commission will go to the creator of the meme template.")
-
-            self.tracker.track_example(parent_submission, example_submission, comment.author.id, bot_reply.id)
-
-            self.comment_on_example(parent_submission, example_submission)
+            # Verify that the post isn't too old to be tracked
+            cur_time = int(time.time())
+            if cur_time > submission.created_utc + self.TRACK_DURATION_SECONDS:
+                return (None, "The example you provided is too old for me to track the score!\n\n" + \
+                    "Only examples that were posted within the last 24 hours are valid.")
+            
+            # Validation passed, so return the Submission
+            return (submission, "")
 
         except praw.exceptions.ClientException as e:
             print("Could not get submission from URL: " + example_url)
-            self.bot.reply(comment, "Thanks for the example, but I couldn't find any Reddit post " + \
+            return(None, "Thanks for the example, but I couldn't find any Reddit post " + \
                 "from the URL tht you provided. Only links to example posts on other subreddits can be scored.")
-            return
 
-        print("\n")
-
+        
     ################## Helper functions ##################
     def create_new_user(self, redditor):
         """
@@ -301,5 +361,5 @@ class ScoreboardFeature(Feature):
             print("[IMT_TEST]:    Reply: " + reply)
 
     def update(self):
-        # Update the submissions being tracked
-        self.tracker.update_scores(3) 
+        # TODO - Check if any examples need to be deleted
+        pass
