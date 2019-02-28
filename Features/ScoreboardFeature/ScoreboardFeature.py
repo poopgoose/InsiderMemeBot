@@ -36,12 +36,17 @@ class ScoreboardFeature(Feature):
     # The duration, in seconds, for which to track each post
     TRACK_DURATION_SECONDS = 24 * 60 * 60 # 24 hours (in seconds)
 
+    # How often to check the Tracking database for expired submisisons
+    CHECK_EXPIRED_INTERVAL = 2 * 60 # Every 2 minutes 
+
     # The amount of the distributor's score that goes to the creator
     CREATOR_COMMISSION = 0.20
     
 
     def __init__(self, bot):
         super(ScoreboardFeature, self).__init__(bot) # Call super constructor
+
+        self.last_expire_check = 0 # The last time that we checked for expired submissions
 
     def process_submission(self, submission):
         # The sticky reply to respond with
@@ -362,4 +367,90 @@ class ScoreboardFeature(Feature):
 
     def update(self):
         # TODO - Check if any examples need to be deleted
-        pass
+        cur_time = int(time.time())
+        if cur_time - self.last_expire_check < ScoreboardFeature.CHECK_EXPIRED_INTERVAL:
+            # Not time to check yet, so just return
+            return
+
+        # Check the database for expired posts
+        expired_items = []
+        tracked_items = self.bot.data_access.scan(DataAccess.Tables.TRACKING)['Items']
+
+        for item in tracked_items:
+            if item['expire_time'] <= item['last_update']:
+                self.untrack_item(item)
+
+        self.last_expire_check = cur_time
+
+    def untrack_item(self, item):
+        """
+        Untracks an expired submission or example.
+
+        item: The item from the Tracking database that has expired
+        """
+
+        print("-" * 40)
+        print("Item has expired: " + str(item))
+
+        ############################################
+        ### Update Users database with the score ###
+        ############################################
+        user_key = item['author_id']
+        creator_commission = int(int(round(item['score']) * self.CREATOR_COMMISSION)) # The commision of the score that would go to the creator. Only used when item['is_example'] is True
+        if item['is_example']:
+            # For examples, the commission for the template creator needs to be deducted from the score
+            field_name = 'distribution_score'
+            score = int(item['score']) - creator_commission
+        else:
+            field_name = 'submission_score'
+            score = int(item['score'])
+
+        # Update the score for the user who submitted the submission/example
+        user_key = {'user_id' : item['author_id']}
+        user_update_expr = "set {} = {} + :score".format(field_name, field_name)
+        user_expr_attrs = {":score" : decimal.Decimal(score)}
+        self.bot.data_access.update_item(
+            DataAccess.Tables.USERS, user_key, user_update_expr, user_expr_attrs)
+
+        if item['is_example']:
+            # Update score for the template creator as well
+            creator_key = {'user_id' : item['template_author_id']}
+            creator_update_expr = "set submission_score = submission_score + :score"
+            creator_expr_attrs = {":score" : decimal.Decimal(creator_commission)}
+            self.bot.data_access.update_item(
+                DataAccess.Tables.USERS, creator_key, creator_update_expr, creator_expr_attrs)
+
+        ############################################
+        ###   Remove from the Tracking Database  ###
+        ############################################
+        self.bot.data_access.delete_item(
+            DataAccess.Tables.TRACKING, {'submission_id' : item['submission_id']})
+
+        ############################################
+        ###       Update the bot comment         ###
+        ############################################
+        bot_comment = self.bot.reddit.comment(id=item['bot_comment_id'])
+
+        # Construct the message to update the comment with
+        if item['is_example']:
+            message = "**Update**\n\nYour example has finished scoring! It received a total of **" + \
+            str(int(item['score'])) + "** points.\n\n"
+            if item['author_id'] != item['template_author_id']:
+                message = message + "You received **" + str(score) + "** points, and **" + \
+                 str(creator_commission) + "** of the points went to the creator of the template."
+            else:
+                message = message + "Since this is your template, you receive all of the points! **" + \
+                str(score) + "** points have gone to your distribution score, and **" + \
+                str(creator_commission) + "** points have gone to your submission score."
+        else:
+            message ="**Update**\n\nYour template has finished scoring! You received **" + \
+            str(int(item["score"])) + "** points.\n\n*This does not include points gained from " + \
+            "example commissions. Commission scores will be reported in the comments beneath the examples.*"
+          
+        edited_body = bot_comment.body + "\n\n" + message
+        try:
+            bot_comment.edit(edited_body)
+        except Exception as e:
+            print("!!!!Unable to edit bot comment!")
+            print("    Comment ID: " + bot_comment.id)
+            print("    Error: " + str(e))
