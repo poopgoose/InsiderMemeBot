@@ -111,13 +111,6 @@ class Tracker:
                 end_time = time.time()
                 update_duration = round(end_time - begin_time, 2)
 
-                print("Submission: " + submission_id + "  (" + submission.title + ")")
-                print("    Author: " + author)
-                print("    Update Time: " + str(update_time))
-                print("    Score: " + str(new_score))
-                print("    Is Example: " + str(item['is_example']))
-                print("    Update Duration: " + str(update_duration) + " seconds")
-                print("-" * 40)
             else:
                 print("Submission has been removed from tracking: " + str(submission_id))
         except Exception as e:
