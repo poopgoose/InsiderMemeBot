@@ -76,6 +76,14 @@ class ScoreboardFeature(Feature):
 
         self.prev_post_time = int(time.time())
 
+    def on_finished_tracking(self, item):
+        """
+        Handle when a post has finished tracking
+        item: The item that has finished tracking
+        """
+
+        print("Handling item: " + str(item))
+
 
     def __create_scoreboard_comment(self, users_by_total, users_by_submission, users_by_distribution):
         """
@@ -118,7 +126,38 @@ class ScoreboardFeature(Feature):
             scoreboard_text = scoreboard_text + "\n" + row_text
 
 
+        ### Best posts ###
+        scoreboard_text = scoreboard_text + "\n\n" + self.__create_top_post_markup()    
+
         print("POSTING SCOREBOARD: " + time_str)
         self.bot.subreddit.submit(
             title = "SCOREBOARD: " + time_str,
             selftext = scoreboard_text)
+
+    def __create_top_post_markup(self):
+        """
+        Helper function to show the top posts
+        """
+
+        markup_str = "------\n"
+        markup_str = markup_str + "**Best Templates**\n\n" + \
+            "**Yesterday** \n\n" + \
+            "  1. TODO \n\n" + \
+            "  2. TODO \n\n" + \
+            "  3. TODO \n\n" + \
+            "**This week** \n\n" + \
+            "  1. TODO \n\n" + \
+            "  2. TODO \n\n" + \
+            "  3. TODO \n\n" + \
+            "**This month** \n\n" + \
+            "  1. TODO\n\n"  + \
+            "  2. TODO\n\n" + \
+            "  3. TODO\n\n" + \
+            "**All time** \n\n" + \
+            "  1. TODO\n\n" + \
+            "  2. TODO\n\n" + \
+            "  3. TODO\n\n" + \
+            "------" + \
+            "**Best Examples**"
+
+        return markup_str

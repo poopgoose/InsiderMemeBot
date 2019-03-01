@@ -120,6 +120,19 @@ class InsiderMemeBot:
 
             time.sleep(1)
 
+    ######################## Callbacks ############################
+    def finished_tracking_callback(self, item):
+        """
+        This callback is triggered whenever an item (submission or example)
+        has finished tracking, and has its final score available.
+
+        item: The item from the Tracking database that has finished tracking
+        """
+        for feature in self.features:
+            # Call the handlers
+            feature.on_finished_tracking(item)
+
+
     ##################### Utility Functions #######################
 
     def reply(self, item, reply, is_sticky=False, suppress_footer = False):
