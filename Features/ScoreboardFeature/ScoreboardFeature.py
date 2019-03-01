@@ -7,6 +7,7 @@ from boto3.dynamodb.conditions import Key
 import json
 import re
 import time
+from datetime import datetime
 from Utils.DataAccess import DataAccess
 
 class ScoreboardFeature(Feature):
@@ -14,6 +15,10 @@ class ScoreboardFeature(Feature):
     This class is responsible for keeping track of the scoreboard data, and for 
     posting the scoreboard in a comment several times per day
     """
+
+    SCOREBOARD_HEADER = \
+        "Ranking | Name | Score\n" + \
+        ":------:|:-----|:-----"
 
 
     # TODO - Replace with exact times
@@ -58,7 +63,7 @@ class ScoreboardFeature(Feature):
             user = users_by_distribution[i]
             ranking_map[user['user_id']]['distribution'] = decimal.Decimal(i + 1)
 
-        # 3. Update each User's Rank
+        # 4. Update each User's Rank
         for user_id in ranking_map:
             ranking_dict = ranking_map[user_id]
             key = {'user_id' : user_id}
@@ -66,32 +71,54 @@ class ScoreboardFeature(Feature):
             attrs = {":dict" : ranking_dict}
             self.bot.data_access.update_item(DataAccess.Tables.USERS, key, expr, attrs)   
 
-        # for i in range(0, len(users_by_total)):
-
-        #     user = users_by_total[i]
-
-        #     # Create the map for the user if it doesn't exist
-            
-
-        #     key = {'user_id' : user['user_id']}
-        #     expr = "set ranking.total = :rank"
-        #     attrs = {":rank" : decimal.Decimal(i)}
-        #     self.bot.data_access.update_item(DataAccess.Tables.USERS, key, expr, attrs)
-
-        # for i in range(0, len(users_by_submission)):
-        #     user = users_by_submission[i]
-        #     key = {'user_id' : user['user_id']}
-        #     expr = "set ranking.submission = :rank"
-        #     attrs = {":rank" : decimal.Decimal(i)}
-        #     self.bot.data_access.update_item(DataAccess.Tables.USERS, key, expr, attrs)
-
-        # for i in range(0, len(users_by_distribution)):
-        #     user = users_by_distribution[i]
-        #     key = {'user_id' : user['user_id']}
-        #     expr = "set ranking.distribution = :rank"
-        #     attrs = {":rank" : decimal.Decimal(i)}
-        #     self.bot.data_access.update_item(DataAccess.Tables.USERS, key, expr, attrs)
-
-
+        # 5. Post the scoreboard
+        self.__create_scoreboard_comment(users_by_total, users_by_submission, users_by_distribution)
 
         self.prev_post_time = int(time.time())
+
+
+    def __create_scoreboard_comment(self, users_by_total, users_by_submission, users_by_distribution):
+        """
+        Helper function for update. Creates the comment for the scoreboard
+
+        users_by_total: The list of all users, sorted by total_score, descending
+        users_by_submission: The list of all users, sorted by submission_score, descending
+        users_by_distribution: The list of all users, sorted by distribution score, descending
+        """
+        now = datetime.now()
+        time_str =  now.strftime("%a, %b %d, %Y %H:%M %Z")
+
+        # The number of users to include in the scoreboard. users_by_total, users_by_submission, and
+        # users_by_distribution are all the same length, just different orderings, so we can just use
+        # users_by_total to determine the number of places to show
+        num_places = min(len(users_by_total), 10)
+
+        #########################################
+        ##### Construct the scoreboard text #####
+        #########################################
+
+        ### Overall Score ###
+        scoreboard_text = ScoreboardFeature.SCOREBOARD_HEADER + "\n|| **OVERALL** |"
+        for i in range(0, num_places):
+            row_text = str(i + 1) + " | " + users_by_total[i]['username'] + " | " + str(users_by_total[i]['total_score'])
+            scoreboard_text = scoreboard_text + "\n" + row_text
+
+        ### Submission Score ###
+        scoreboard_text = scoreboard_text + "\n | |  " + \
+            "\n || **TOP SUBMITTERS** |"
+        for i in range(0, num_places):
+            row_text = str(i + 1) + " | " + users_by_submission[i]['username'] + " | " + str(users_by_submission[i]['submission_score'])
+            scoreboard_text = scoreboard_text + "\n" + row_text
+
+        ### Distribution Score ###
+        scoreboard_text = scoreboard_text + "\n | |  " + \
+            "\n || **TOP DISTRIBUTORS** |"
+        for i in range(0, num_places):
+            row_text = str(i + 1) + " | " + users_by_distribution[i]['username'] + " | " + str(users_by_distribution[i]['distribution_score'])
+            scoreboard_text = scoreboard_text + "\n" + row_text
+
+
+        print("POSTING SCOREBOARD: " + time_str)
+        self.bot.subreddit.submit(
+            title = "SCOREBOARD: " + time_str,
+            selftext = scoreboard_text)
