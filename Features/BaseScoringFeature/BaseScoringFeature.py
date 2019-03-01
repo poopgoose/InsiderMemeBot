@@ -424,6 +424,13 @@ class BaseScoringFeature(Feature):
 
             self.update_total_score(item['template_author_id'])
 
+        ##########################
+        ### Trigger Callback   ###
+        ##########################
+        # Trigger the callback so that other features have a chance to process the item
+        # before deleting it
+        self.bot.finished_tracking_callback(item)
+
         ############################################
         ###   Remove from the Tracking Database  ###
         ############################################
