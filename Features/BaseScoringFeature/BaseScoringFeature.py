@@ -412,6 +412,8 @@ class BaseScoringFeature(Feature):
         self.bot.data_access.update_item(
             DataAccess.Tables.USERS, user_key, user_update_expr, user_expr_attrs)
 
+        self.update_total_score(item['author_id'])
+
         if item['is_example']:
             # Update score for the template creator as well
             creator_key = {'user_id' : item['template_author_id']}
@@ -419,6 +421,8 @@ class BaseScoringFeature(Feature):
             creator_expr_attrs = {":score" : decimal.Decimal(creator_commission)}
             self.bot.data_access.update_item(
                 DataAccess.Tables.USERS, creator_key, creator_update_expr, creator_expr_attrs)
+
+            self.update_total_score(item['template_author_id'])
 
         ############################################
         ###   Remove from the Tracking Database  ###
@@ -454,3 +458,20 @@ class BaseScoringFeature(Feature):
             print("!!!!Unable to edit bot comment!")
             print("    Comment ID: " + bot_comment.id)
             print("    Error: " + str(e))
+
+    def update_total_score(self, user_id):
+        """
+        Helper function for untrack_item. Updates the "total_score" column in the database for the given user
+        """
+
+        user_item = self.bot.data_access.query(DataAccess.Tables.USERS, 
+            key_condition_expr = Key('user_id').eq(user_id))['Items'][0]
+
+        total_score = int(user_item['distribution_score']) + int(user_item['submission_score'])
+
+
+        user_key = {'user_id' : user_id}
+        user_update_expr = "set total_score = :total"
+        user_expr_attrs = {":total" : decimal.Decimal(total_score)}
+        self.bot.data_access.update_item(
+            DataAccess.Tables.USERS, user_key, user_update_expr, user_expr_attrs)
