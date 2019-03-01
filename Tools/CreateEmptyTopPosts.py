@@ -12,39 +12,22 @@ dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
 
 top_table = dynamodb.Table("TopPosts-dev")
 
+empty_item =  {
+        'submission_id' : 'No Data',
+        'user_id' : 'No Data',
+        'username' : 'No Data',
+        'score' : decimal.Decimal(0),
+        'permalink' : 'No Data',
+        'scoring_time' : decimal.Decimal(0),
+        'title' : 'No Data'
+      }
 
-empty_map = {
-    ":items" : [
-      {
-        'submission_id' : 'No Data',
-        'user_id' : 'No Data',
-        'username' : 'No Data',
-        'score' : decimal.Decimal(0),
-        'permalink' : 'No Data',
-        'scoring_time' : decimal.Decimal(0)
-      },
-      {
-        'submission_id' : 'No Data',
-        'user_id' : 'No Data',
-        'username' : 'No Data',
-        'score' : decimal.Decimal(0),
-        'permalink' : 'No Data',
-        'scoring_time' : decimal.Decimal(0)
-      },
-      {
-        'submission_id' : 'No Data',
-        'user_id' : 'No Data',
-        'username' : 'No Data',
-        'score' : decimal.Decimal(0),
-        'permalink' : 'No Data',
-        'scoring_time' : decimal.Decimal(0)
-      },
-    ]
-}
+empty_list = [empty_item, empty_item, empty_item]
 
-top_table.put_item(Item={'key' : "last_day", "items" : empty_map})
-top_table.put_item(Item={'key' : "last_week", "items" : empty_map})
-top_table.put_item(Item={'key' : "last_month", "items" : empty_map})
-top_table.put_item(Item={'key' : "last_year", "items" : empty_map})
-top_table.put_item(Item={'key' : "all_time", "items" : empty_map})
+top_table.put_item(Item={'key' : "last_day", "submissions" : empty_list, "examples" : empty_list})
+top_table.put_item(Item={'key' : "last_week", "submissions" : empty_list, "examples" : empty_list})
+top_table.put_item(Item={'key' : "last_month", "submissions" : empty_list, "examples" : empty_list})
+top_table.put_item(Item={'key' : "last_year", "submissions" : empty_list, "examples" : empty_list})
+top_table.put_item(Item={'key' : "all_time", "submissions" : empty_list, "examples" : empty_list})
+
 
