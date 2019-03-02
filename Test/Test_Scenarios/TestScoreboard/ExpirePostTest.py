@@ -73,7 +73,7 @@ class ExpirePostTest(unittest.TestCase):
 
         test_mode = True
         test_bot = InsiderMemeBot(reddit, test_mode)
-        scoreboard_feature = ScoreboardFeature(test_bot)
+        self.scoreboard_feature = ScoreboardFeature(test_bot)
 
         # Initialize database
         dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
@@ -96,14 +96,14 @@ class ExpirePostTest(unittest.TestCase):
         user4_example  = self.make_data('user4', 20, True)
 
 
-        scoreboard_feature.on_finished_tracking(user1_template)
-        scoreboard_feature.on_finished_tracking(user1_example)
-        scoreboard_feature.on_finished_tracking(user2_template)
-        scoreboard_feature.on_finished_tracking(user2_example)
-        scoreboard_feature.on_finished_tracking(user3_template)
-        scoreboard_feature.on_finished_tracking(user3_example)
-        scoreboard_feature.on_finished_tracking(user4_template)
-        scoreboard_feature.on_finished_tracking(user4_example)
+        self.scoreboard_feature.on_finished_tracking(user1_template)
+        self.scoreboard_feature.on_finished_tracking(user1_example)
+        self.scoreboard_feature.on_finished_tracking(user2_template)
+        self.scoreboard_feature.on_finished_tracking(user2_example)
+        self.scoreboard_feature.on_finished_tracking(user3_template)
+        self.scoreboard_feature.on_finished_tracking(user3_example)
+        self.scoreboard_feature.on_finished_tracking(user4_template)
+        self.scoreboard_feature.on_finished_tracking(user4_example)
 
 
     ########## Functions for initializing Test Data #################
@@ -162,7 +162,7 @@ class ExpirePostTest(unittest.TestCase):
         expr = "set examples = :updated_examples, submissions = :updated_submissions"
         attrs = {":updated_examples" : updated_examples, ":updated_submissions" : updated_submissions}
         self.top_posts_table.update_item(Key=key, 
-            UpdateExpression=expr, ExpressionAttributeValues=attrs)   
+            UpdateExpression=expr, ExpressionAttributeValues=attrs)
 
 
 
@@ -173,6 +173,7 @@ class ExpirePostTest(unittest.TestCase):
 
 
         last_day_data = self.top_posts_table.query(KeyConditionExpression=Key('key').eq('last_day'))['Items'][0]
+        last_week_data = self.top_posts_table.query(KeyConditionExpression=Key('key').eq('last_week'))['Items'][0]
 
         # Verify the data
         self.assertEqual(last_day_data['submissions'][0]['user_id'], 'user3')
@@ -193,10 +194,46 @@ class ExpirePostTest(unittest.TestCase):
         self.assertEqual(last_day_data['examples'][3]['user_id'], 'user3')
         self.assertEqual(int(last_day_data['examples'][3]['score']), 8)
 
-
         ### Mark user2 template and example as 25 hours old
         for key_name in ["last_day", "last_week", "last_month", "last_year", "all_time"]:
             self.set_scoring_time(key_name, 'user2', 25*60*60)
+
+        # Perform the next update
+        self.scoreboard_feature.update()
+
+        # Verify the data
+        self.assertEqual(last_day_data['submissions'][0]['user_id'], 'user3')
+        self.assertEqual(int(last_day_data['submissions'][0]['score']), 11)
+        self.assertEqual(last_day_data['submissions'][1]['user_id'], 'user1')
+        self.assertEqual(int(last_day_data['submissions'][1]['score']), 10)
+        self.assertEqual(last_day_data['submissions'][2]['user_id'], 'user4')
+        self.assertEqual(int(last_day_data['submissions'][2]['score']), 6)
+
+        self.assertEqual(last_day_data['examples'][0]['user_id'], 'user4')
+        self.assertEqual(int(last_day_data['examples'][0]['score']), 20)
+        self.assertEqual(last_day_data['examples'][1]['user_id'], 'user1')
+        self.assertEqual(int(last_day_data['examples'][1]['score']), 10)
+        self.assertEqual(last_day_data['examples'][2]['user_id'], 'user3')
+        self.assertEqual(int(last_day_data['examples'][2]['score']), 8)
+
+        # Verify that last_week data wasn't touched, because 25h is still within the week
+        self.assertEqual(last_week_data['submissions'][0]['user_id'], 'user3')
+        self.assertEqual(int(last_week_data['submissions'][0]['score']), 11)
+        self.assertEqual(last_week_data['submissions'][1]['user_id'], 'user1')
+        self.assertEqual(int(last_week_data['submissions'][1]['score']), 10)
+        self.assertEqual(last_week_data['submissions'][2]['user_id'], 'user2')
+        self.assertEqual(int(last_week_data['submissions'][2]['score']), 9)
+        self.assertEqual(last_week_data['submissions'][3]['user_id'], 'user4')
+        self.assertEqual(int(last_week_data['submissions'][3]['score']), 6)
+
+        self.assertEqual(last_week_data['examples'][0]['user_id'], 'user4')
+        self.assertEqual(int(last_week_data['examples'][0]['score']), 20)
+        self.assertEqual(last_week_data['examples'][1]['user_id'], 'user2')
+        self.assertEqual(int(last_week_data['examples'][1]['score']), 19)
+        self.assertEqual(last_week_data['examples'][2]['user_id'], 'user1')
+        self.assertEqual(int(last_week_data['examples'][2]['score']), 10)
+        self.assertEqual(last_week_data['examples'][3]['user_id'], 'user3')
+        self.assertEqual(int(last_week_data['examples'][3]['score']), 8)
             
 ##### Run the test #####
 if __name__ == '__main__':
