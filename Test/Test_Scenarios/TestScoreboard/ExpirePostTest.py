@@ -200,6 +200,8 @@ class ExpirePostTest(unittest.TestCase):
 
         # Perform the next update
         self.scoreboard_feature.update()
+        last_day_data = self.top_posts_table.query(KeyConditionExpression=Key('key').eq('last_day'))['Items'][0]
+        last_week_data = self.top_posts_table.query(KeyConditionExpression=Key('key').eq('last_week'))['Items'][0]
 
         # Verify the data
         self.assertEqual(last_day_data['submissions'][0]['user_id'], 'user3')
