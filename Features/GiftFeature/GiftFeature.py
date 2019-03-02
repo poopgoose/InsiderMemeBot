@@ -34,7 +34,7 @@ class GiftFeature(Feature):
                 # Validation failed.
                 self.bot.reply(comment, validation_message)
 
-            # Now that we've validated the comment and know the gift amount, we can validate the gift itself
+            # Now that we've validated the comment and know the gift amount, we can continue with processing
             self.__process_gift(comment, gift_amount)
 
 
@@ -112,6 +112,18 @@ class GiftFeature(Feature):
 
         # Transfer the points
         self.__transfer_points(sender, recipient, amount_to_send)
+
+        # Update with the fresh data
+        sender = self.bot.data_access.query(DataAccess.Tables.USERS, Key('user_id').eq(comment.author.id))['Items'][0]
+
+        # Reply with a comment
+        if amount_to_send == gift_amount:
+            self.bot.reply(comment, "Your gift of **" + str(amount_to_send) + "** points was sent to " + recipient['username'] + "!\n\n" + \
+                "Your point balance is now **" + str(sender['total_score']) + "** points.")
+        else:
+            self.bot.reply(comment, "Your gift amount was too high, so I sent the maximum gift of **" + \
+                str(GiftFeature.GIFT_MAX) + "** points instead!\n\n" + \
+                "Your point balance is now **" + str(sender['total_score']) + "** points.")
 
     def __transfer_points(self, sender, recipient, amount):
         """
