@@ -48,7 +48,6 @@ class ScoreboardFeature(Feature):
             seconds_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
 
             for post_time in ScoreboardFeature.SCOREBOARD_POST_TIMES:
-                print("Time from target: " + str(seconds_since_midnight - post_time))
                 if(seconds_since_midnight - post_time <= ScoreboardFeature.UPDATE_INTERVAL and 
                     seconds_since_midnight - post_time >= 0):
                     # This is the update that contained the posting time, so post the scoreboard!
@@ -59,6 +58,9 @@ class ScoreboardFeature(Feature):
         """
         Posts the Scoreboard to Reddit
         """
+
+        self.__flush_old_items() # Get rid of any outdated posts in the high score list
+
         # Get the users from the user database
         user_data = self.bot.data_access.scan(DataAccess.Tables.USERS)['Items']
 
