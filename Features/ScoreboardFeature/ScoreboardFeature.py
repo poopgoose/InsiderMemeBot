@@ -100,42 +100,75 @@ class ScoreboardFeature(Feature):
             'score' : tracking_item['score'],
             'permalink' : 'TODO',
             'scoring_time' : decimal.Decimal(int(time.time())),
-            'title' : 'TODO'
+            'title' : 'TODO',
+            'is_example' : tracking_item['is_example']
         }
 
-        # See how the post compares with posts from the same day
-        key_expr = Key('key').eq("last_day")
-        top_yesterday = self.bot.data_access.query(DataAccess.Tables.TOP_POSTS, key_expr)['Items'][0]
-        if tracking_item['is_example']:
-            pass # TODO
-        else:
-            # Submissions, sorted by score (highest first)
-            top_items = sorted(top_yesterday['submissions'], key=lambda x: x['score'], reverse=True)
-            updated_items = top_items
+        # Return if the post doesn't have a high score for the day
+        if not self.__compare_with_posts(new_top_item, "last_day"):
+            return
 
-            is_updated = False
-            for i in range(0, len(top_items)):
-                top_item = top_items[i]
-                if top_item['submission_id'] == "No Data":
-                    # There's no data for the time period, so just take the slot
-                    udpated_items[i] = new_top_item
-                    is_updated = True
-                    break
-                elif top_item['score'] < new_top_item['score']:
-                    # Insert the new item, and push out the one in last place
-                    updated_items.insert(i, new_top_item)
-                    del updated_items[-1]
-                    is_updated = True
-                    break
+        # After updating the last-day high scores, return if the post isn't a high score for the week
+        if not self.__compare_with_posts(new_top_item, "last_week"):
+            return
+
+        # After updating the last week high scores, return if the post isn't a high score for the month
+        if not self.__compare_with_posts(new_top_item, "last_month"):
+            return
+
+        # After updating the last month high scores, return if the post isn't a high score for the year
+        if not self.__compare_with_posts(new_top_item, "last_year"):
+            return
+
+        # After updating the last year high scores, check and update if the post is a high score of all time
+        self.__compare_with_posts(new_top_item, "all_time")
+
+    def __compare_with_posts(self, item, key_name):
+        """
+        Helper function for on_finished_tracking.
+        Compares the given item with the TopPosts data table, against the data with the given key_name.
+        Updates the database with the new TopPosts, if the given item has a high score.
+
+        item: The item to compare with the list
+        key_name: A string, one of "last_day", "last_week", "last_month", "last_year", or "all_time".
+
+        Returns: True if the post is a high score and the database was updated. False otherwise
+        """
+        key_expr = Key('key').eq(key_name)
+        top_row = self.bot.data_access.query(DataAccess.Tables.TOP_POSTS, key_expr)['Items'][0]
+        print("KEY_NAME: " + key_name)
+
+        items_key = 'examples' if item['is_example'] else 'submissions'
+
+        # Items, sorted by score (highest first)
+        top_items = sorted(top_row[items_key], key=lambda x: x['score'], reverse=True)
+        updated_items = top_items
+
+        is_updated = False
+        for i in range(0, len(top_items)):
+            top_item = top_items[i]
+            if top_item['submission_id'] == "No Data":
+                # There's no data for the time period, so just take the slot
+                updated_items[i] = item
+                is_updated = True
+                break
+            elif top_item['score'] < item['score']:
+                # Insert the new item, and push out the one in last place
+                updated_items.insert(i, item)
+                del updated_items[-1]
+                is_updated = True
+                break
 
 
-            if is_updated:
-                # Update the database
-                update_key = {'key' : 'last_day'}
-                update_expr = "set submissions = :updated_items"
-                update_attrs = {":updated_items" : updated_items}
-                self.bot.data_access.update_item(
-                    DataAccess.Tables.TOP_POSTS, update_key, update_expr, update_attrs)
+        if is_updated:
+            # Update the database
+            update_key = {'key' : key_name}
+            update_expr = "set " + items_key + " = :updated_items"
+            update_attrs = {":updated_items" : updated_items}
+            self.bot.data_access.update_item(
+                DataAccess.Tables.TOP_POSTS, update_key, update_expr, update_attrs)
+
+        return is_updated
 
     def __create_scoreboard_comment(self, users_by_total, users_by_submission, users_by_distribution):
         """
