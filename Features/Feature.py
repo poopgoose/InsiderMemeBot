@@ -13,6 +13,12 @@ class Feature:
         self.bot = bot
             
 
+    def update(self):
+        """
+        Called every cycle for the features to perform routine updates
+        """
+        pass
+
     def process_comment(self, comment):
         """
         Processes a new comment

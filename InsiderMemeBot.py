@@ -13,6 +13,7 @@ import traceback
 from Features.ActivityTracker import ActivityTracker
 from Features.BaseScoringFeature.BaseScoringFeature import BaseScoringFeature
 from Features.ScoreboardFeature.ScoreboardFeature import ScoreboardFeature
+from Features.GiftFeature.GiftFeature import GiftFeature
 
 from Utils.DataAccess import DataAccess
 import decimal
@@ -68,6 +69,7 @@ class InsiderMemeBot:
         """
         self.features.append(BaseScoringFeature(self))
         self.features.append(ScoreboardFeature(self))
+        self.features.append(GiftFeature(self))
         
         
     def run(self):
