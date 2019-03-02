@@ -6,6 +6,7 @@ from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key
 import time
 from Utils.DataAccess import DataAccess
+import math
 import os
 import re
 
@@ -97,6 +98,71 @@ class GiftFeature(Feature):
         if not 'gifts' in recipient:
             self.__initialize_gift_data(recipient['user_id'])
 
+
+        # TODO: If the user has already maxed out their gifts to the user today, then don't allow it
+
+        # Bring the gift amount down to the maximum if it's too high
+        amount_to_send = min(gift_amount, GiftFeature.GIFT_MAX)
+        
+        # Check to make sure the sender has enough points
+        if amount_to_send > sender['total_score']:
+            self.bot.reply(comment, "You don't have enough points to gift that much!\n\n" + \
+                "You have **" + str(sender['total_score']) + "** points.")
+            return
+
+        # Transfer the points
+        self.__transfer_points(sender, recipient, amount_to_send)
+
+    def __transfer_points(self, sender, recipient, amount):
+        """
+        Helper function for __process_gift. Makes the transfer of points from one user to another
+        """
+       
+        ####################################################################
+        ### Determine how many points to draw from the submission score, ###
+        ### and how many to draw from the distribution score             ###
+        ####################################################################
+        split_amt = math.ceil(amount / 2)
+        if sender['submission_score'] >= split_amt and sender['distribution_score'] >= split_amt:
+            distribution_amt = split_amt
+            submission_amt   = amount - split_amt # Subtract from total in case we have an odd number of points
+        elif sender['submission_score'] < split_amt:
+            # If the submission score is below the threshold, then use all of them
+            submission_amt = int(sender['submission_score'])
+            distribution_amt = amount - submission_amt
+        elif sender['distribution_score'] < split_amt:
+            # If the distribution score is below the threshold, then use all of them
+            distribution_amt = int(sender['distribution_score'])
+            submission_amt   = amount - dsitribution_amt
+        else:
+            # Shouldn't get here, since we've already checked for a sufficient balance
+            raise RuntimeError("Not enough points to send gift!")
+
+        #############################################
+        ### Transfer the amounts to the recipient ###
+        #############################################
+
+        # Deduct from sender
+        sender_key = {'user_id' : sender['user_id']}
+        sender_update_expr = "set distribution_score = :dist, submission_score = :sub, total_score = :tot"
+        sender_expr_attrs = {
+            ":dist" : decimal.Decimal(int(sender['distribution_score']) - distribution_amt),
+            ":sub"  : decimal.Decimal(int(sender['submission_score']) - submission_amt),
+            ":tot"  : decimal.Decimal(int(sender['total_score']) - amount)
+        }
+        self.bot.data_access.update_item(DataAccess.Tables.USERS, sender_key, sender_update_expr, sender_expr_attrs)
+
+        # Add to the recipient
+        recip_key = {'user_id' : recipient['user_id']}
+        recip_update_expr = "set distribution_score = :dist, submission_score = :sub, total_score = :tot"
+        recip_expr_attrs = {
+            ":dist" : decimal.Decimal(int(recipient['distribution_score']) + distribution_amt),
+            ":sub"  : decimal.Decimal(int(recipient['submission_score']) + submission_amt),
+            ":tot"  : decimal.Decimal(int(recipient['total_score']) + amount)
+        }
+        self.bot.data_access.update_item(DataAccess.Tables.USERS, recip_key, recip_update_expr, recip_expr_attrs)
+
+        # TODO: Update gifts dictionary
 
     def __initialize_gift_data(self, user_id):
         """
