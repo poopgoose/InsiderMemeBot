@@ -7,6 +7,7 @@ from boto3.dynamodb.conditions import Key
 import time
 from Utils.DataAccess import DataAccess
 import os
+import re
 
 class GiftFeature(Feature):
     """
@@ -15,6 +16,9 @@ class GiftFeature(Feature):
     comment.
     """
 
+
+    # Constants
+    GIFT_MAX = 100 # The maximum amount that can be sent in a gift
 
     def __init__(self, bot):
         super(GiftFeature, self).__init__(bot)
@@ -53,9 +57,22 @@ class GiftFeature(Feature):
             print("GiftFeature: Unable to gift points to same user. Comment ID: " + comment.id)
             return(0, "You can't send a gift to yourself!")
 
-        # 4. Make sure that the gift isn't to the bot
-        if comment.parent().author.id == self.bot.reddit.user.me().id:
-            print("GiftFeature: Unable to gift points to bot account. Comment ID: " + comment.id)
-            return(0, "Thanks for the thought, but I'm a bot and can't accept gifts!")
+        # 4. Make sure that the gift isn't to the bot. Gifting to bot is permitted in test mode
+
+        if not self.bot.test_mode:
+            if comment.parent().author.id == self.bot.reddit.user.me().id:
+                print("GiftFeature: Unable to gift points to bot account. Comment ID: " + comment.id)
+                return(0, "Thanks for the thought, but I'm a bot and can't accept gifts!")
 
         # 5. Make sure that the gift amount can be parsed from the command
+        gift_regex = "!gift\s+(\d+)\s*$"
+        match = re.match(gift_regex, comment.body)
+        if match == None:
+            print("GiftFeature: Invalid command: " + comment.body + "   Comment ID: " + comment.id)
+            return(0, "Unable to process your gift command! The correct syntax is '!gift <amount>'\n" + \
+                      "Example:  !gift 10")
+
+        gift_amount = int(match.groups()[0])
+        print("GIFT AMOUNT: " + str(gift_amount))
+
+        return(gift_amount, "")
