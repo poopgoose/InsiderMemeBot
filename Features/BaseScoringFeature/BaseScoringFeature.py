@@ -55,7 +55,7 @@ class BaseScoringFeature(Feature):
         bot_reply = None
 
         # Create an account for the user if they don't have one
-        if not self.is_user(submission.author):
+        if not self.bot.is_user(submission.author):
             self.create_new_user(submission.author)            
             reply_str = reply_str + "\n\n\n\n*New user created for " + submission.author.name + "*"
         
@@ -103,7 +103,7 @@ class BaseScoringFeature(Feature):
     
     def process_new(self, comment):
         author = comment.author
-        if self.is_user(author):
+        if self.bot.is_user(author):
             # The user already has an account
             self.bot.reply(comment, "There is already an account for " + author.name)
             return
@@ -233,8 +233,8 @@ class BaseScoringFeature(Feature):
         reply to the comment with, explaining why it's invalid. 
         """
 
-        # First, check to see if teh submitter is a user
-        if not self.is_user(comment.author):
+        # First, check to see if the submitter is a user
+        if not self.bot.is_user(comment.author):
             print("No account for user: " + str(comment.author.name))
             return (None, "You don't have an account yet!\n\nReply with '!new' to create one.")
 
@@ -332,18 +332,6 @@ class BaseScoringFeature(Feature):
         else:
             print("Failed to create user: " + str(redditor))
             return False
-
-    def is_user(self, author):
-        """
-        Returns true if the author is already a user in the DynamoDB database.
-        """
-        
-        # Query the table to get any user with a user_id matching the author's id
-        response = self.bot.data_access.query(DataAccess.Tables.USERS, Key('user_id').eq(author.id))
-        num_matches = len(response['Items'])
-        
-        # If there is a match, then the author is already a user
-        return num_matches > 0
 
     def is_direct_reply(self, comment):
         """
