@@ -82,72 +82,60 @@ class ScoreboardFeature(Feature):
 
         self.prev_post_time = int(time.time())
 
-    def on_finished_tracking(self, item):
+    def on_finished_tracking(self, tracking_item):
         """
         Handle when a post has finished tracking
-        item: The item that has finished tracking
+        tracking_item: The item that has finished tracking
         """
 
         # Get the user info for the post that finished tracking
         user_info = self.bot.data_access.query(DataAccess.Tables.USERS,
-            key_condition_expr = Key('user_id').eq(item['author_id']))['Items'][0]
+            key_condition_expr = Key('user_id').eq(tracking_item['author_id']))['Items'][0]
 
+        # The item that will be stored in the TopPosts database if it has a high score
+        new_top_item = {
+            'submission_id' : tracking_item['submission_id'],
+            'user_id' : user_info['user_id'],
+            'username' : user_info['username'],
+            'score' : tracking_item['score'],
+            'permalink' : 'TODO',
+            'scoring_time' : decimal.Decimal(int(time.time())),
+            'title' : 'TODO'
+        }
 
         # See how the post compares with posts from the same day
         key_expr = Key('key').eq("last_day")
         top_yesterday = self.bot.data_access.query(DataAccess.Tables.TOP_POSTS, key_expr)['Items'][0]
-        if item['is_example']:
+        if tracking_item['is_example']:
             pass # TODO
         else:
-            # Submissions
-            top_items = top_yesterday['submissions']
-            new_items = top_items
+            # Submissions, sorted by score (highest first)
+            top_items = sorted(top_yesterday['submissions'], key=lambda x: x['score'], reverse=True)
+            updated_items = top_items
+
+            is_updated = False
             for i in range(0, len(top_items)):
                 top_item = top_items[i]
-                if top_item['submission_id'] == "No Data": 
-                    # There's no data for the time period, so take the slot
-                    new_item = {
-                        'submission_id' : item['submission_id'],
-                        'user_id' : user_info['user_id'],
-                        'username' : user_info['username'],
-                        'score' : item['score'],
-                        'permalink' : 'TODO',
-                        'scoring_time' : decimal.Decimal(int(time.time())),
-                        'title' : 'TODO'
-                    }
-                    new_items[i] = new_item
-                    
-                    # Update the data table
-                    update_key = {'key' : 'last_day'}
-                    update_expr = "set submissions = :new_items"
-                    update_attrs = {":new_items" : new_items}
-                    self.bot.data_access.update_item(
-                        DataAccess.Tables.TOP_POSTS, update_key, update_expr, update_attrs)
-
-                    return
-
-        #print("-" * 40)
-        #print(" ----- TOP SUBMISSIONS ----")
-        #print(top_submissions)
-        #print("-" * 40)
+                if top_item['submission_id'] == "No Data":
+                    # There's no data for the time period, so just take the slot
+                    udpated_items[i] = new_top_item
+                    is_updated = True
+                    break
+                elif top_item['score'] < new_top_item['score']:
+                    # Insert the new item, and push out the one in last place
+                    updated_items.insert(i, new_top_item)
+                    del updated_items[-1]
+                    is_updated = True
+                    break
 
 
-        ### Add the item to the Top Submission database ###
-
-
-        item = {
-            'submission_id' : item['submission_id'],
-            'is_example' : item['is_example'],
-            'permalink' : "TODO",
-            'scoring_time' : int(time.time()),
-            'author_id' : item['author_id'],
-            'username' : user_info['username'],
-            'score' : item['score']
-        }
-
-        # self.bot.data_access.put_item(DataAccess.Tables.TOP_SUBMISSIONS, item)
-
-
+            if is_updated:
+                # Update the database
+                update_key = {'key' : 'last_day'}
+                update_expr = "set submissions = :updated_items"
+                update_attrs = {":updated_items" : updated_items}
+                self.bot.data_access.update_item(
+                    DataAccess.Tables.TOP_POSTS, update_key, update_expr, update_attrs)
 
     def __create_scoreboard_comment(self, users_by_total, users_by_submission, users_by_distribution):
         """
