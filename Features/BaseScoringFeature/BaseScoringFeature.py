@@ -69,10 +69,11 @@ class BaseScoringFeature(Feature):
             'expire_time' : decimal.Decimal(submission.created_utc + BaseScoringFeature.TRACK_DURATION_SECONDS),
             'is_example' : False,
             'template_id' : " ",
-            'distributor_id' : " ",
             'bot_comment_id' : bot_reply.id,
             'last_update' : 0,
-            'score' : 0
+            'score' : 0,
+            'permalink' : submission.permalink,
+            'title' : submission.title
             }
         try:
             self.bot.data_access.put_item(DataAccess.Tables.TRACKING, item)
@@ -200,7 +201,9 @@ class BaseScoringFeature(Feature):
                'template_author_id' : template_submission.author.id,
                'bot_comment_id' : bot_reply.id,
                'last_update' : 0,
-               'score' : 0
+               'score' : 0,
+               'permalink' : example_submission.permalink,
+               'title' : example_submission.title
             }
             success = self.bot.data_access.put_item(DataAccess.Tables.TRACKING, item)
             if not success:
@@ -440,6 +443,7 @@ class BaseScoringFeature(Feature):
         ############################################
         ###       Update the bot comment         ###
         ############################################
+
         bot_comment = self.bot.reddit.comment(id=item['bot_comment_id'])
 
         # Construct the message to update the comment with

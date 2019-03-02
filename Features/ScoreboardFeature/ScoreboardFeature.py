@@ -16,11 +16,6 @@ class ScoreboardFeature(Feature):
     posting the scoreboard in a comment several times per day
     """
 
-    SCOREBOARD_HEADER = \
-        "Ranking | Name | Score\n" + \
-        ":------:|:-----|:-----"
-
-
     # TODO - Replace with exact times
     POST_INTERVAL =  1 * 60 # Post every minute for debugging 
 
@@ -98,9 +93,9 @@ class ScoreboardFeature(Feature):
             'user_id' : user_info['user_id'],
             'username' : user_info['username'],
             'score' : tracking_item['score'],
-            'permalink' : 'TODO',
+            'permalink' : tracking_item['permalink'],
             'scoring_time' : decimal.Decimal(int(time.time())),
-            'title' : 'TODO',
+            'title' : tracking_item['title'],
             'is_example' : tracking_item['is_example']
         }
 
@@ -136,8 +131,6 @@ class ScoreboardFeature(Feature):
         """
         key_expr = Key('key').eq(key_name)
         top_row = self.bot.data_access.query(DataAccess.Tables.TOP_POSTS, key_expr)['Items'][0]
-        print("KEY_NAME: " + key_name)
-
         items_key = 'examples' if item['is_example'] else 'submissions'
 
         # Items, sorted by score (highest first)
@@ -191,7 +184,11 @@ class ScoreboardFeature(Feature):
         #########################################
 
         ### Overall Score ###
-        scoreboard_text = ScoreboardFeature.SCOREBOARD_HEADER + "\n|| **OVERALL** |"
+        table_header = \
+        "Ranking | Name | Score\n" + \
+        ":------:|:-----|:-----"
+
+        scoreboard_text = "#Top Traders\n  " + table_header + "\n|| **OVERALL** |"
         for i in range(0, num_places):
             row_text = str(i + 1) + " | " + users_by_total[i]['username'] + " | " + str(users_by_total[i]['total_score'])
             scoreboard_text = scoreboard_text + "\n" + row_text
@@ -210,39 +207,50 @@ class ScoreboardFeature(Feature):
             row_text = str(i + 1) + " | " + users_by_distribution[i]['username'] + " | " + str(users_by_distribution[i]['distribution_score'])
             scoreboard_text = scoreboard_text + "\n" + row_text
 
-
-        ### Best posts ###
+        ### Top posts ###
         scoreboard_text = scoreboard_text + "\n\n" + self.__create_top_post_markup()    
 
         print("POSTING SCOREBOARD: " + time_str)
-        #self.bot.subreddit.submit(
-        #    title = "SCOREBOARD: " + time_str,
-        #    selftext = scoreboard_text)
+        self.bot.subreddit.submit(
+            title = "SCOREBOARD: " + time_str,
+            selftext = scoreboard_text)
 
     def __create_top_post_markup(self):
         """
         Helper function to show the top posts
         """
-
         markup_str = "------\n"
-        markup_str = markup_str + "**Best Templates**\n\n" + \
-            "**Yesterday** \n\n" + \
-            "  1. TODO \n\n" + \
-            "  2. TODO \n\n" + \
-            "  3. TODO \n\n" + \
-            "**This week** \n\n" + \
-            "  1. TODO \n\n" + \
-            "  2. TODO \n\n" + \
-            "  3. TODO \n\n" + \
-            "**This month** \n\n" + \
-            "  1. TODO\n\n"  + \
-            "  2. TODO\n\n" + \
-            "  3. TODO\n\n" + \
-            "**All time** \n\n" + \
-            "  1. TODO\n\n" + \
-            "  2. TODO\n\n" + \
-            "  3. TODO\n\n" + \
-            "------" + \
-            "**Best Examples**"
+        markup_str = markup_str + "#Top Posts\n  " 
+        markup_str = markup_str + "Templates | Examples\n" + \
+                                  ":-------- | :-------\n"
+        markup_str = markup_str + self.__create_top_post_list_markup("Yesterday", "last_day") + "\n &nbsp; | \n "
+        markup_str = markup_str + self.__create_top_post_list_markup("This week", "last_week") + "\n &nbsp; |\n "
+        markup_str = markup_str + self.__create_top_post_list_markup("This month", "last_month") + "\n &nbsp; |\n "
+        markup_str = markup_str + self.__create_top_post_list_markup("This Year", "last_year") + "\n &nbsp; |\n "
+        markup_str = markup_str + self.__create_top_post_list_markup("All Time", "all_time") + "\n"
+        return markup_str
+
+    def __create_top_post_list_markup(self, title, key):
+        """
+        Helper funcdtion to show the top posts for a single list in the TopPosts data table
+        title: The title for the table in the comment
+        key: The key for the table in the database
+        """
+        markup_str = "**" + title + "** ||"
+
+        top_posts = self.bot.data_access.query(DataAccess.Tables.TOP_POSTS, Key('key').eq(key))['Items'][0]
+
+        # Examples and Submissions, sorted by score
+        top_examples = sorted(top_posts["examples"], key=lambda x: x['score'], reverse=True)
+        top_templates = sorted(top_posts["submissions"], key=lambda x: x['score'], reverse=True)
+        
+        for i in range(0, 3):
+            markup_str = markup_str + "\n" + \
+              "**" + str(i + 1) + ":** [" + top_templates[i]['title'] + "](" + top_templates[i]['permalink'] + ") | " + \
+              "**" + str(i + 1) + ":** [" + top_examples[i]['title'] + "](" + top_examples[i]['permalink'] + ")\n" + \
+              "&nbsp;" * 4 + "Author: " + top_templates[i]['username'] + " | " + \
+              "&nbsp;" * 4 + "Author: " + top_examples[i]['username'] + "\n" + \
+              "&nbsp;" * 4 + "Score: " + str(top_templates[i]['score']) + " | " + \
+              "&nbsp;" * 4 + "Score: " + str(top_examples[i]['score'])
 
         return markup_str
