@@ -9,6 +9,7 @@ import re
 import time
 from datetime import datetime
 from Utils.DataAccess import DataAccess
+import pytz
 
 class ScoreboardFeature(Feature):
     """
@@ -37,6 +38,7 @@ class ScoreboardFeature(Feature):
         super(ScoreboardFeature, self).__init__(bot) # Call super constructor
 
         self.prev_update_time = 0
+        self.timezone = pytz.timezone('US/Eastern')
 
     def update(self):
         """
@@ -46,9 +48,9 @@ class ScoreboardFeature(Feature):
         if time.time() >= self.prev_update_time + ScoreboardFeature.UPDATE_INTERVAL:
             self.__flush_old_items() # Flush out any expired items from the database
 
-            now = datetime.now()
+            now = self.timezone.localize(datetime.now())
             seconds_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
-
+  
             for post_time in ScoreboardFeature.SCOREBOARD_POST_TIMES:
                 if(seconds_since_midnight - post_time <= ScoreboardFeature.UPDATE_INTERVAL and 
                     seconds_since_midnight - post_time >= 0):
@@ -195,8 +197,12 @@ class ScoreboardFeature(Feature):
         users_by_submission: The list of all users, sorted by submission_score, descending
         users_by_distribution: The list of all users, sorted by distribution score, descending
         """
-        now = datetime.now()
-        time_str =  now.strftime("%a, %b %d, %Y %H:%M %Z")
+
+        # Create the post title from the timezone
+        now = self.timezone.localize(datetime.now())
+        date_str =  now.strftime("%a, %b %d, %Y:")
+        time_str = now.strftime("%I:%M %p %Z")
+        title_str = "SCOREBOARD: " + date_str + "\n\n" + time_str
 
         # The number of users to include in the scoreboard. users_by_total, users_by_submission, and
         # users_by_distribution are all the same length, just different orderings, so we can just use
@@ -236,7 +242,7 @@ class ScoreboardFeature(Feature):
 
         print("POSTING SCOREBOARD: " + time_str)
         self.bot.subreddit.submit(
-            title = "SCOREBOARD: " + time_str,
+            title = title_str,
             selftext = scoreboard_text)
 
     def __create_top_post_markup(self):
