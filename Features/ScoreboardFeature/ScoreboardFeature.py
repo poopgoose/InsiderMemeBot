@@ -16,8 +16,7 @@ class ScoreboardFeature(Feature):
     posting the scoreboard in a comment several times per day
     """
 
-    # TODO - Replace with exact times
-    POST_INTERVAL =  1 * 60 # Post every minute for debugging 
+    UPDATE_INTERVAL =  1 * 60 # Update once per minute
 
     # Time interval constants, in seconds
     LAST_DAY = 60 * 60 * 24
@@ -25,29 +24,50 @@ class ScoreboardFeature(Feature):
     LAST_MONTH = LAST_DAY * 30
     LAST_YEAR = LAST_DAY * 365
 
+    # Times, relative to midnight (in seconds) to post the scoreboard
+    SCOREBOARD_POST_TIMES = \
+    [
+        0, # Midnight
+        6 * 60 * 60,  # 6AM
+        12 * 60 * 60, # 12PM
+        18 * 60 * 60 # 6PM
+    ]
+
     def __init__(self, bot):
         super(ScoreboardFeature, self).__init__(bot) # Call super constructor
 
-        self.prev_post_time = 0
+        self.prev_update_time = 0
 
     def update(self):
         """
         Updates the scoreboard feature
         """
 
-        if time.time() < self.prev_post_time + ScoreboardFeature.POST_INTERVAL:
-            # It isn't time to update yet, so just return
-            return
+        if time.time() >= self.prev_update_time + ScoreboardFeature.UPDATE_INTERVAL:
+            now = datetime.now()
+            seconds_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
 
-        # 1. Get the users from the user database
+            for post_time in ScoreboardFeature.SCOREBOARD_POST_TIMES:
+                print("Time from target: " + str(seconds_since_midnight - post_time))
+                if(seconds_since_midnight - post_time <= ScoreboardFeature.UPDATE_INTERVAL and 
+                    seconds_since_midnight - post_time >= 0):
+                    # This is the update that contained the posting time, so post the scoreboard!
+                    self.post_scoreboard()
+            self.prev_update_time = int(time.time())
+
+    def post_scoreboard(self):
+        """
+        Posts the Scoreboard to Reddit
+        """
+        # Get the users from the user database
         user_data = self.bot.data_access.scan(DataAccess.Tables.USERS)['Items']
 
-        # 2. Sort by score types
+        # Sort by score types
         users_by_total = sorted(user_data, key=lambda x: x['total_score'], reverse=True)
         users_by_submission = sorted(user_data, key=lambda x: x['submission_score'], reverse=True)
         users_by_distribution = sorted(user_data, key=lambda x: x['distribution_score'], reverse=True)
 
-        # 3. Create the map for each user's rank
+        # Create the map for each user's rank
         ranking_map = {}
         for i in range(0, len(users_by_total)):
             user = users_by_total[i]
@@ -64,7 +84,7 @@ class ScoreboardFeature(Feature):
             user = users_by_distribution[i]
             ranking_map[user['user_id']]['distribution'] = decimal.Decimal(i + 1)
 
-        # 4. Update each User's Rank
+        # Update each User's Rank
         for user_id in ranking_map:
             ranking_dict = ranking_map[user_id]
             key = {'user_id' : user_id}
@@ -72,16 +92,17 @@ class ScoreboardFeature(Feature):
             attrs = {":dict" : ranking_dict}
             self.bot.data_access.update_item(DataAccess.Tables.USERS, key, expr, attrs)   
 
-        # 5. Post the scoreboard
+        # Post the scoreboard
         self.__create_scoreboard_comment(users_by_total, users_by_submission, users_by_distribution)
 
-        self.prev_post_time = int(time.time())
 
     def on_finished_tracking(self, tracking_item):
         """
         Handle when a post has finished tracking
         tracking_item: The item that has finished tracking
         """
+
+        self.__flush_old_items() # Get rid of any outdated posts in the high score list
 
         # Get the user info for the post that finished tracking
         user_info = self.bot.data_access.query(DataAccess.Tables.USERS,
@@ -151,7 +172,6 @@ class ScoreboardFeature(Feature):
                 del updated_items[-1]
                 is_updated = True
                 break
-
 
         if is_updated:
             # Update the database
@@ -254,3 +274,59 @@ class ScoreboardFeature(Feature):
               "&nbsp;" * 4 + "Score: " + str(top_examples[i]['score'])
 
         return markup_str
+
+    def __flush_old_items(self):
+        """
+        Flushes old items from the TopPosts data table.
+        i.e, it will remove a 25-hour old post from the "last_day" list.
+        """
+        self.__flush_old_items_from_list("last_day", ScoreboardFeature.LAST_DAY)
+        self.__flush_old_items_from_list("last_week", ScoreboardFeature.LAST_WEEK)
+        self.__flush_old_items_from_list("last_month", ScoreboardFeature.LAST_MONTH)
+        self.__flush_old_items_from_list("last_year", ScoreboardFeature.LAST_YEAR)
+
+    def __flush_old_items_from_list(self, key_name, max_age):
+        """
+        Helper function for __flush_old_items.
+        key_name: The key of the lists to flush from the TopPosts table
+        max_age: The maximum age, in seconds, to permit in the table.
+        """
+
+        # Items are never removed from the top score list, they're just replaced with empty placeholders
+        empty_item =  {
+            'submission_id' : 'No Data',
+            'user_id' : 'No Data',
+            'username' : 'No Data',
+            'score' : decimal.Decimal(0),
+            'permalink' : 'No Data',
+            'scoring_time' : decimal.Decimal(0),
+            'title' : 'No Data'
+        }
+
+        key_expr = Key('key').eq(key_name)
+        data_row = self.bot.data_access.query(DataAccess.Tables.TOP_POSTS, key_expr)['Items'][0]
+
+        # Flush examples and submissions
+        item_keys = ["submissions", "examples"]
+        for item_key in item_keys:
+            item_list = data_row[item_key]
+            updated_list = item_list
+            is_updated = False
+            for i in range(0, len(item_list)):
+                item = item_list[i]
+                item_age = int(time.time()) - int(item['scoring_time'])
+                if item_age >= max_age:
+                    print("Removing expired item from high score table.")
+                    print("  Submission: " + item['submission_id'])
+                    print("  List: " + key_name)
+                    print("  Age (s): " + str(item_age))
+                    updated_list[i] = empty_item
+                    is_updated = True
+
+            if is_updated:
+                # Update the database
+                update_key = {'key' : key_name}
+                update_expr = "set " + item_key + " = :updated_items"
+                update_attrs = {":updated_items" : updated_list}
+                self.bot.data_access.update_item(
+                    DataAccess.Tables.TOP_POSTS, update_key, update_expr, update_attrs)
