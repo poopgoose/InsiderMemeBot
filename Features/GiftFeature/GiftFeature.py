@@ -20,6 +20,7 @@ class GiftFeature(Feature):
 
     # Constants
     GIFT_MAX = 100 # The maximum amount that can be sent in a gift
+    GIFT_RESET_TIME = 24 * 60 * 60 # How long, in seconds, before a gift can be sent to a user again.
 
     def __init__(self, bot):
         super(GiftFeature, self).__init__(bot)
@@ -95,8 +96,13 @@ class GiftFeature(Feature):
         # If a user has never sent or received a gift, then new gift data will need to be created
         if not 'gifts' in sender:
             self.__initialize_gift_data(sender['user_id'])
+            # Update with the fresh data
+            sender = self.bot.data_access.query(DataAccess.Tables.USERS, Key('user_id').eq(sender['user_id']))['Items'][0]
+
         if not 'gifts' in recipient:
             self.__initialize_gift_data(recipient['user_id'])
+            # Update with the fresh data
+            recipient = self.bot.data_access.query(DataAccess.Tables.USERS, Key('user_id').eq(recipient['user_id']))['Items'][0]
 
 
         # TODO: If the user has already maxed out their gifts to the user today, then don't allow it
@@ -154,27 +160,52 @@ class GiftFeature(Feature):
         ### Transfer the amounts to the recipient ###
         #############################################
 
-        # Deduct from sender
+        ### Updated sender dictionary ###
+        updated_sender_dict = sender['gifts']
+        sent_item_dict = updated_sender_dict['sent']
+        sent_item_dict[recipient['user_id']] = {
+            "amount" : decimal.Decimal(amount),
+            "send_time" : decimal.Decimal(int(time.time()))
+        }
+        updated_sender_dict['sent'] = sent_item_dict
+
+        ### Deduct from sender ###
         sender_key = {'user_id' : sender['user_id']}
-        sender_update_expr = "set distribution_score = :dist, submission_score = :sub, total_score = :tot"
+        sender_update_expr = "set distribution_score = :dist, submission_score = :sub, total_score = :tot, gifts=:gift_dict"
         sender_expr_attrs = {
             ":dist" : decimal.Decimal(int(sender['distribution_score']) - distribution_amt),
             ":sub"  : decimal.Decimal(int(sender['submission_score']) - submission_amt),
-            ":tot"  : decimal.Decimal(int(sender['total_score']) - amount)
+            ":tot"  : decimal.Decimal(int(sender['total_score']) - amount),
+            ":gift_dict" : updated_sender_dict
         }
         self.bot.data_access.update_item(DataAccess.Tables.USERS, sender_key, sender_update_expr, sender_expr_attrs)
 
-        # Add to the recipient
+        ### Updated recipient dictionary ###
+        updated_receive_dict = recipient['gifts']
+        receive_item_dict = updated_receive_dict['received']
+        receive_item_dict[sender['user_id']] = {
+            "amount" : decimal.Decimal(amount),
+            "receive_time" : decimal.Decimal(int(time.time()))
+        }
+        updated_receive_dict['received'] = sent_item_dict
+
+        ### Add to the recipient ###
         recip_key = {'user_id' : recipient['user_id']}
-        recip_update_expr = "set distribution_score = :dist, submission_score = :sub, total_score = :tot"
+        recip_update_expr = "set distribution_score = :dist, submission_score = :sub, total_score = :tot, gifts = :gift_dict"
         recip_expr_attrs = {
             ":dist" : decimal.Decimal(int(recipient['distribution_score']) + distribution_amt),
             ":sub"  : decimal.Decimal(int(recipient['submission_score']) + submission_amt),
-            ":tot"  : decimal.Decimal(int(recipient['total_score']) + amount)
+            ":tot"  : decimal.Decimal(int(recipient['total_score']) + amount),
+            ":gift_dict" : updated_receive_dict
         }
         self.bot.data_access.update_item(DataAccess.Tables.USERS, recip_key, recip_update_expr, recip_expr_attrs)
 
-        # TODO: Update gifts dictionary
+        print(str(amount) + " points were gifted from " + sender['username'] + " to " + recipient['username'])
+
+        #####################################
+        ### Update the gifts dictionaries ###
+        #####################################
+
 
     def __initialize_gift_data(self, user_id):
         """
@@ -185,8 +216,8 @@ class GiftFeature(Feature):
         user_expr_attrs = {
             ":gift_dict" : 
             {
-               "sent" : [],
-               "received" : []
+               "sent" : {},
+               "received" : {}
             }}
         self.bot.data_access.update_item(
             DataAccess.Tables.USERS, user_key, user_update_expr, user_expr_attrs)
