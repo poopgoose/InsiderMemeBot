@@ -44,6 +44,8 @@ class ScoreboardFeature(Feature):
         """
 
         if time.time() >= self.prev_update_time + ScoreboardFeature.UPDATE_INTERVAL:
+            self.__flush_old_items() # Flush out any expired items from the database
+
             now = datetime.now()
             seconds_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
 
@@ -58,8 +60,6 @@ class ScoreboardFeature(Feature):
         """
         Posts the Scoreboard to Reddit
         """
-
-        self.__flush_old_items() # Get rid of any outdated posts in the high score list
 
         # Get the users from the user database
         user_data = self.bot.data_access.scan(DataAccess.Tables.USERS)['Items']
@@ -141,6 +141,7 @@ class ScoreboardFeature(Feature):
         # After updating the last year high scores, check and update if the post is a high score of all time
         self.__compare_with_posts(new_top_item, "all_time")
 
+
     def __compare_with_posts(self, item, key_name):
         """
         Helper function for on_finished_tracking.
@@ -152,6 +153,7 @@ class ScoreboardFeature(Feature):
 
         Returns: True if the post is a high score and the database was updated. False otherwise
         """
+
         key_expr = Key('key').eq(key_name)
         top_row = self.bot.data_access.query(DataAccess.Tables.TOP_POSTS, key_expr)['Items'][0]
         items_key = 'examples' if item['is_example'] else 'submissions'
@@ -286,7 +288,6 @@ class ScoreboardFeature(Feature):
         self.__flush_old_items_from_list("last_week", ScoreboardFeature.LAST_WEEK)
         self.__flush_old_items_from_list("last_month", ScoreboardFeature.LAST_MONTH)
         self.__flush_old_items_from_list("last_year", ScoreboardFeature.LAST_YEAR)
-
     def __flush_old_items_from_list(self, key_name, max_age):
         """
         Helper function for __flush_old_items.
@@ -317,7 +318,7 @@ class ScoreboardFeature(Feature):
             for i in range(0, len(item_list)):
                 item = item_list[i]
                 item_age = int(time.time()) - int(item['scoring_time'])
-                if item_age >= max_age:
+                if item_age >= max_age and item['submission_id'] != 'No Data':
                     print("Removing expired item from high score table.")
                     print("  Submission: " + item['submission_id'])
                     print("  List: " + key_name)
@@ -326,6 +327,10 @@ class ScoreboardFeature(Feature):
                     is_updated = True
 
             if is_updated:
+
+                # Sort the updated list by score, descending
+                updated_list = sorted(updated_list, key=lambda x: x['score'], reverse=True)
+
                 # Update the database
                 update_key = {'key' : key_name}
                 update_expr = "set " + item_key + " = :updated_items"
