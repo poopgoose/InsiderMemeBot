@@ -87,6 +87,12 @@ class InsiderMemeBot:
                     if self.is_processed_recently(submission):
                         # Skip over anything we've already looked at
                         continue
+
+                    elif (submission.is_self and not self.test_mode)fffff:
+                        # Skip over text-only submisisons (Announcements, etc.)
+                        # Allow processing of text-only submissions in test-mode only
+                        self.mark_item_processed(submission)
+                        continue
                             
                     elif self.is_old(submission) or self.did_comment(submission):
                         # Nothing to be done for old posts or posts that the bot has already commented on
