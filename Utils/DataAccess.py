@@ -16,7 +16,7 @@ class DataAccess:
         # For this to work, the AWS credentials must be present on the system.
         # This can be done by using "pip install awscli", and then running "aws configure"
         self.dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
-        self.client = boto3.client('dynamodb')
+        self.client = boto3.client('dynamodb', region_name='us-east-2')
 
         # Determine if we're using the actual data, or the development data
         if not test_mode:
