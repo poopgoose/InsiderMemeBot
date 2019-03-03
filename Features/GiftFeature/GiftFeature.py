@@ -104,8 +104,19 @@ class GiftFeature(Feature):
             # Update with the fresh data
             recipient = self.bot.data_access.query(DataAccess.Tables.USERS, Key('user_id').eq(recipient['user_id']))['Items'][0]
 
-
-        # TODO: If the user has already maxed out their gifts to the user today, then don't allow it
+        # If the sender has already given a gift to the recipient in the last 24 hours, then they can't send another
+        sent_gift_dict = sender['gifts']['sent']
+        if recipient['user_id'] in sent_gift_dict:
+            last_gift_time = sent_gift_dict[recipient['user_id']]['send_time']
+            time_since_gift = int(time.time()) - last_gift_time
+            if time_since_gift < GiftFeature.GIFT_RESET_TIME:
+                # Compute how much time the sender needs to wait until they can send another gift to the user
+                remaining_time = seconds = GiftFeature.GIFT_RESET_TIME - time_since_gift
+                m, s = divmod(remaining_time, 60)
+                h, m = divmod(m, 60)
+                self.bot.reply(comment, "You have already sent a gift to " + recipient['username'] + " today!" + \
+                    "You may send another gift in **" + str(h) + "** hours and **" + str(m) + "** minutes.")
+                return
 
         # Bring the gift amount down to the maximum if it's too high
         amount_to_send = min(gift_amount, GiftFeature.GIFT_MAX)
@@ -201,11 +212,6 @@ class GiftFeature(Feature):
         self.bot.data_access.update_item(DataAccess.Tables.USERS, recip_key, recip_update_expr, recip_expr_attrs)
 
         print(str(amount) + " points were gifted from " + sender['username'] + " to " + recipient['username'])
-
-        #####################################
-        ### Update the gifts dictionaries ###
-        #####################################
-
 
     def __initialize_gift_data(self, user_id):
         """
