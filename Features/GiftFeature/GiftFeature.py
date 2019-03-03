@@ -34,9 +34,9 @@ class GiftFeature(Feature):
             if validation_message != "":
                 # Validation failed.
                 self.bot.reply(comment, validation_message)
-
-            # Now that we've validated the comment and know the gift amount, we can continue with processing
-            self.__process_gift(comment, gift_amount)
+            else:
+                # Now that we've validated the comment and know the gift amount, we can continue with processing
+                self.__process_gift(comment, gift_amount)
 
 
     def __validate_comment(self, comment):
@@ -78,7 +78,7 @@ class GiftFeature(Feature):
         match = re.match(gift_regex, comment.body)
         if match == None:
             print("GiftFeature: Invalid command: " + comment.body + "   Comment ID: " + comment.id)
-            return(0, "Unable to process your gift command! The correct syntax is '!gift <amount>'\n" + \
+            return(0, "Unable to process your gift command! The correct syntax is '!gift <amount>'\n\n" + \
                       "Example:  !gift 10")
 
         gift_amount = int(match.groups()[0])
@@ -123,8 +123,10 @@ class GiftFeature(Feature):
         
         # Check to make sure the sender has enough points
         if amount_to_send > sender['total_score']:
-            self.bot.reply(comment, "You don't have enough points to gift that much!\n\n" + \
-                "You have **" + str(sender['total_score']) + "** points.")
+            self.bot.reply(comment, "You don't have enough points to give that much!  \n  " + \
+                "You have **" + str(sender['total_score']) + "** points that you can give.  \n  " + \
+                "*You can only give points from posts that have finished scoring, so this number may be " + \
+                "smaller than your reported score if you have recently submitted a template or example*")
             return
 
         # Transfer the points
@@ -135,12 +137,12 @@ class GiftFeature(Feature):
 
         # Reply with a comment
         if amount_to_send == gift_amount:
-            self.bot.reply(comment, "Your gift of **" + str(amount_to_send) + "** points was sent to " + recipient['username'] + "!\n\n" + \
-                "Your point balance is now **" + str(sender['total_score']) + "** points.")
+            self.bot.reply(comment, "Your gift of **" + str(amount_to_send) + "** points was sent to " + recipient['username'] + "!  \n  " + \
+                "Your giftable point balance is now **" + str(sender['total_score']) + "** points.  \n  ")
         else:
             self.bot.reply(comment, "Your gift amount was too high, so I sent the maximum gift of **" + \
                 str(GiftFeature.GIFT_MAX) + "** points instead!\n\n" + \
-                "Your point balance is now **" + str(sender['total_score']) + "** points.")
+                "Your giftable point balance is now **" + str(sender['total_score']) + "** points.")
 
     def __transfer_points(self, sender, recipient, amount):
         """
