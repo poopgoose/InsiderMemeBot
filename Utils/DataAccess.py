@@ -16,6 +16,7 @@ class DataAccess:
         # For this to work, the AWS credentials must be present on the system.
         # This can be done by using "pip install awscli", and then running "aws configure"
         self.dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
+        self.client = boto3.client('dynamodb')
 
         # Determine if we're using the actual data, or the development data
         if not test_mode:
@@ -119,7 +120,21 @@ class DataAccess:
         try:
             return self.get_table(table_id).scan()
         except Exception as e:
-            message = "Unable to scan table: " + self.tableIdToString(table_id)
+            print("Unable to scan table: " + self.tableIdToString(table_id))
+            print("Error: " + str(e))
+            traceback.print_exc()
+
+    def describe_table(self, table_id):
+        """
+        Gets the table description from the AWS database
+        table_id: One of the IDs defined in the Tables subclass
+        """
+        try:
+            return self.client.describe_table(TableName = self.tableIdToString(table_id))
+        except Exception as e:
+            print("Unable to get table description: " + self.tableIdToString(table_id))
+            print("Error: " + str(e))
+            traceback.print_exc()
 
     
     # Helper function
@@ -132,8 +147,6 @@ class DataAccess:
             return self.top_posts_table
         else:
             raise RuntimeError("Bad Table Id: " + str(table_id))
-
-
 
 
     def tableIdToString(self, id):
