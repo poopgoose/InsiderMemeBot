@@ -176,7 +176,7 @@ class BaseScoringFeature(Feature):
             else:
                 # New users won't have ranking data until the next Scoreboard posting
                 reply = reply + "\n\n**Ranking**\n\n" + \
-                                "&nbps;" * 4 + "*It may take a little time for ranking data to show up for new users. Please check again later!*"
+                                "&nbsp;" * 4 + "*It may take a little time for ranking data to show up for new users. Please check again later!*"
             
             self.bot.reply(comment, reply)
         except Exception as e:
