@@ -88,7 +88,7 @@ class InsiderMemeBot:
                         # Skip over anything we've already looked at
                         continue
 
-                    elif (submission.is_self and not self.test_mode)fffff:
+                    elif (submission.is_self and not self.test_mode):
                         # Skip over text-only submisisons (Announcements, etc.)
                         # Allow processing of text-only submissions in test-mode only
                         self.mark_item_processed(submission)

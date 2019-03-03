@@ -157,10 +157,28 @@ class BaseScoringFeature(Feature):
             total_distribution_score = distribution_score_from_users + distribution_score_from_tracking 
 
             # Respond to the comment that the account was created
-            self.bot.reply(comment, "**Score for " + comment.author.name + ":**\n\n" + \
-                "  Your submission score is " + str(total_submission_score) + "\n\n" + \
-                "  Your distribution score is " + str(total_distribution_score) + "\n\n" + \
-                "**Total Score:      " + str(total_submission_score + total_distribution_score) + "**")
+            reply =  "**Score for " + comment.author.name + ":**  \n\n" + \
+                     "&nbsp;" * 4 + "Your submission score is **" + str(total_submission_score) + "**  \n  " + \
+                     "&nbsp;" * 4 + "Your distribution score is **" + str(total_distribution_score) + "**  \n  " + \
+                     "&nbsp;" * 4 + "**Total Score:      " + str(total_submission_score + total_distribution_score) + "**"
+
+            if 'ranking' in user:
+                # There is ranking data from the latest posted Scoreboard, so report that as well
+                print("Ranking Data!")
+                ranking_data = user['ranking']
+                response = self.bot.data_access.describe_table(DataAccess.Tables.USERS)
+                num_users = int(response['Table']['ItemCount'])
+                ranking_str = "**Ranking**\n\n" + \
+                              "&nbsp;" * 4 + "Placed **" + str(ranking_data['submission']) + "** out of **" + str(num_users) + "** for submissions  \n  " + \
+                              "&nbsp;" * 4 + "Placed **" + str(ranking_data['distribution']) + "** out of **" + str(num_users) + "** for distributions  \n  " + \
+                              "&nbsp;" * 4 + "Placed **" + str(ranking_data['total']) + "** out of **" + str(num_users) + "** overall."
+                reply = reply + "\n\n" + ranking_str
+            else:
+                # New users won't have ranking data until the next Scoreboard posting
+                reply = reply + "\n\n**Ranking**\n\n" + \
+                                "&nbps;" * 4 + "*It may take a little time for ranking data to show up for new users. Please check again later!*"
+            
+            self.bot.reply(comment, reply)
         except Exception as e:
             print("!!!!! Could not get score!")
             print("    Comment ID: " + str(comment.id))
