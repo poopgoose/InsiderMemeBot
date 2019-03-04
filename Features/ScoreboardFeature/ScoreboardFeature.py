@@ -17,7 +17,7 @@ class ScoreboardFeature(Feature):
     posting the scoreboard in a comment several times per day
     """
 
-    UPDATE_INTERVAL =  1 * 60 # Update once per minute
+    UPDATE_INTERVAL =  1 * 10 # Update once per minute
 
     # Time interval constants, in seconds
     LAST_DAY = 60 * 60 * 24
@@ -31,7 +31,8 @@ class ScoreboardFeature(Feature):
         0, # Midnight
         6 * 60 * 60,  # 6AM
         12 * 60 * 60, # 12PM
-        18 * 60 * 60 # 6PM
+        18 * 60 * 60, # 6PM,
+        10 * 60 * 60  + 40 * 60 # 10:40AM (Debugging)
     ]
 
     def __init__(self, bot):
@@ -50,6 +51,9 @@ class ScoreboardFeature(Feature):
 
             now = self.timezone.localize(datetime.now())
             seconds_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
+            m,s = divmod(seconds_since_midnight, 60)
+            h,m = divmod(m, 60)
+            print("Time since midnight: " + str(h) + " hours, " + str(m) + " min, " + str(s) + "s")
   
             for post_time in ScoreboardFeature.SCOREBOARD_POST_TIMES:
                 if(seconds_since_midnight - post_time <= ScoreboardFeature.UPDATE_INTERVAL and 
