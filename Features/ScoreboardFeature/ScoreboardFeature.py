@@ -39,7 +39,7 @@ class ScoreboardFeature(Feature):
     # POST EVERY HOUR FOR TESTING
     SCOREBOARD_POST_TIMES = \
     [
-        0 * 60 * 60
+        0 * 60 * 60,
         1 * 60 * 60,
         2 * 60 * 60,
         3 * 60 * 60,
