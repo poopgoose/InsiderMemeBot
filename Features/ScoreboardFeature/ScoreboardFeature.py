@@ -7,7 +7,7 @@ from boto3.dynamodb.conditions import Key
 import json
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, tzinfo
 from Utils.DataAccess import DataAccess
 import pytz
 
@@ -17,7 +17,8 @@ class ScoreboardFeature(Feature):
     posting the scoreboard in a comment several times per day
     """
 
-    UPDATE_INTERVAL =  1 * 10 # Update once per minute
+    UPDATE_INTERVAL =  1 # Update once per minute
+    POST_TIME_TOLERANCE = 2 * 60 # Can post within 2 minutes on either side of the target
 
     # Time interval constants, in seconds
     LAST_DAY = 60 * 60 * 24
@@ -25,14 +26,14 @@ class ScoreboardFeature(Feature):
     LAST_MONTH = LAST_DAY * 30
     LAST_YEAR = LAST_DAY * 365
 
-    # Times, relative to midnight (in seconds) to post the scoreboard
+    # Times, relative to midnight (in seconds) UTC to post the scoreboarddatetime.utcnow
     SCOREBOARD_POST_TIMES = \
     [
-        0, # Midnight
-        6 * 60 * 60,  # 6AM
-        12 * 60 * 60, # 12PM
-        18 * 60 * 60, # 6PM,
-        10 * 60 * 60  + 40 * 60 # 10:40AM (Debugging)
+        1 * 60 * 60, # 1AM UTC (7 AM EST)
+        7 * 60 * 60,  # 7AM UTC
+        13 * 60 * 60, # 1PM UTC
+        19 * 60 * 60, # 7PM UTC
+        21 * 60 * 60  + 20 * 60 # 10:40AM (Debugging)
     ]
 
     def __init__(self, bot):
@@ -40,6 +41,7 @@ class ScoreboardFeature(Feature):
 
         self.prev_update_time = 0
         self.timezone = pytz.timezone('US/Eastern')
+        self.already_posted = False # Set to true when a scoreboard has just been posted, so it isn't posted again until the next target time
 
     def update(self):
         """
@@ -49,17 +51,31 @@ class ScoreboardFeature(Feature):
         if time.time() >= self.prev_update_time + ScoreboardFeature.UPDATE_INTERVAL:
             self.__flush_old_items() # Flush out any expired items from the database
 
-            now = self.timezone.localize(datetime.now())
+            now = datetime.utcnow()
             seconds_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
+            print("Time delta: " + str(seconds_since_midnight))
+            print("-" * 40)
             m,s = divmod(seconds_since_midnight, 60)
             h,m = divmod(m, 60)
             print("Time since midnight: " + str(h) + " hours, " + str(m) + " min, " + str(s) + "s")
   
+            is_in_post_range = False # Whether or not we're within a valid time interval to post the scoreboard
             for post_time in ScoreboardFeature.SCOREBOARD_POST_TIMES:
-                if(seconds_since_midnight - post_time <= ScoreboardFeature.UPDATE_INTERVAL and 
-                    seconds_since_midnight - post_time >= 0):
-                    # This is the update that contained the posting time, so post the scoreboard!
+                if abs(seconds_since_midnight - post_time) <= ScoreboardFeature.POST_TIME_TOLERANCE:
+                    is_in_post_range = True
+                    break
+
+            if is_in_post_range:
+                if not self.already_posted:
+                    # We're in range of a target time and haven't posted yet, so post the scoreboard!
+                    print("Posting scoreboard...")
+                    update_begin = int(time.time())
                     self.post_scoreboard()
+                    update_end = int(time.time())
+                    print("Time to create scoreboard: " + str(update_end - update_begin) + " seconds.")
+                    self.already_posted = True
+            else:
+                self.already_posted = False # Reset until we're in the next valid posting range
             self.prev_update_time = int(time.time())
 
     def post_scoreboard(self):
@@ -93,12 +109,16 @@ class ScoreboardFeature(Feature):
             ranking_map[user['user_id']]['distribution'] = decimal.Decimal(i + 1)
 
         # Update each User's Rank
+        # NOTE: If posting the scoreboard is slow, it's probably because this loop is causing the 
+        # AWS DynamoDB service to throttle write requests.
         for user_id in ranking_map:
             ranking_dict = ranking_map[user_id]
             key = {'user_id' : user_id}
             expr = "set ranking = :dict"
             attrs = {":dict" : ranking_dict}
-            self.bot.data_access.update_item(DataAccess.Tables.USERS, key, expr, attrs)   
+            self.bot.data_access.update_item(DataAccess.Tables.USERS, key, expr, attrs)
+        print("Updated ranking for " + str(len(ranking_map)) + " users.")
+
 
         # Post the scoreboard
         self.__create_scoreboard_comment(users_by_total, users_by_submission, users_by_distribution)
@@ -203,7 +223,8 @@ class ScoreboardFeature(Feature):
         """
 
         # Create the post title from the timezone
-        now = self.timezone.localize(datetime.now())
+        #now = self.timezone.localize(datetime.utcnow())
+        now = datetime.now(tz=self.timezone)
         date_str =  now.strftime("%a, %b %d, %Y:")
         time_str = now.strftime("%I:%M %p %Z")
         title_str = "SCOREBOARD: " + date_str + "\n\n" + time_str
