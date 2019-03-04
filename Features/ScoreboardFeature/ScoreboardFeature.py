@@ -27,42 +27,10 @@ class ScoreboardFeature(Feature):
     LAST_YEAR = LAST_DAY * 365
 
     # Times, relative to midnight (in seconds) UTC to post the scoreboarddatetime.utcnow
-    
-
-    #SCOREBOARD_POST_TIMES = \
-    #[
-    #    1 * 60 * 60, # 1AM UTC (7 AM EST)
-    #    7 * 60 * 60,  # 7AM UTC
-    #    13 * 60 * 60, # 1PM UTC
-    #    19 * 60 * 60, # 7PM UTC
-    #]
-    # POST EVERY HOUR FOR TESTING
     SCOREBOARD_POST_TIMES = \
     [
-        0 * 60 * 60,
-        1 * 60 * 60,
-        2 * 60 * 60,
-        3 * 60 * 60,
-        4 * 60 * 60,
-        5 * 60 * 60,
-        6 * 60 * 60,
-        7 * 60 * 60,
-        8 * 60 * 60,
-        9 * 60 * 60,
-        10 * 60 * 60,
-        11 * 60 * 60,
-        12 * 60 * 60,
-        13 * 60 * 60,
-        14 * 60 * 60,
-        15 * 60 * 60,
-        16 * 60 * 60,
-        17 * 60 * 60,
-        18 * 60 * 60,
-        19 * 60 * 60,
-        20 * 60 * 60,
-        21 * 60 * 60,
-        22 * 60 * 60,
-        23 * 60 * 60
+        0,            # 12AM UTC / 7PM EST
+        12 * 60 * 60, # 12PM UTC / 7AM EST
     ]
 
     def __init__(self, bot):
