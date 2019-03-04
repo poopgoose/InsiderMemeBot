@@ -82,6 +82,12 @@ class GiftFeature(Feature):
                       "Example:  !gift 10")
 
         gift_amount = int(match.groups()[0])
+
+        # Check to make sure the amount is a positive value
+        if gift_amount <= 0:
+            print("GiftFeature: Gift amount must be at least 1")
+            return(0, "I can't send that amount! Please choose a value between 1 and " + str(GiftFeature.GIFT_MAX) + " to gift.")
+
         return(gift_amount, "")
 
     def __process_gift(self, comment, gift_amount):
@@ -137,7 +143,8 @@ class GiftFeature(Feature):
 
         # Reply with a comment
         if amount_to_send == gift_amount:
-            self.bot.reply(comment, "Your gift of **" + str(amount_to_send) + "** points was sent to " + recipient['username'] + "!  \n  " + \
+            point_str = "point" if amount_to_send == 1 else "points"
+            self.bot.reply(comment, "Your gift of **" + str(amount_to_send) + "** " + point_str + " was sent to " + recipient['username'] + "!  \n  " + \
                 "Your giftable point balance is now **" + str(sender['total_score']) + "** points.  \n  ")
         else:
             self.bot.reply(comment, "Your gift amount was too high, so I sent the maximum gift of **" + \
