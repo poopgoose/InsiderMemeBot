@@ -17,7 +17,7 @@ class ScoreboardFeature(Feature):
     posting the scoreboard in a comment several times per day
     """
 
-    UPDATE_INTERVAL =  1 # Update once per minute
+    UPDATE_INTERVAL =  1 * 60 # Update once per minute
     POST_TIME_TOLERANCE = 2 * 60 # Can post within 2 minutes on either side of the target
 
     # Time interval constants, in seconds
@@ -27,13 +27,42 @@ class ScoreboardFeature(Feature):
     LAST_YEAR = LAST_DAY * 365
 
     # Times, relative to midnight (in seconds) UTC to post the scoreboarddatetime.utcnow
+    
+
+    #SCOREBOARD_POST_TIMES = \
+    #[
+    #    1 * 60 * 60, # 1AM UTC (7 AM EST)
+    #    7 * 60 * 60,  # 7AM UTC
+    #    13 * 60 * 60, # 1PM UTC
+    #    19 * 60 * 60, # 7PM UTC
+    #]
+    # POST EVERY HOUR FOR TESTING
     SCOREBOARD_POST_TIMES = \
     [
-        1 * 60 * 60, # 1AM UTC (7 AM EST)
-        7 * 60 * 60,  # 7AM UTC
-        13 * 60 * 60, # 1PM UTC
-        19 * 60 * 60, # 7PM UTC
-        21 * 60 * 60  + 20 * 60 # 10:40AM (Debugging)
+        0 * 60 * 60
+        1 * 60 * 60,
+        2 * 60 * 60,
+        3 * 60 * 60,
+        4 * 60 * 60,
+        5 * 60 * 60,
+        6 * 60 * 60,
+        7 * 60 * 60,
+        8 * 60 * 60,
+        9 * 60 * 60,
+        10 * 60 * 60,
+        11 * 60 * 60,
+        12 * 60 * 60,
+        13 * 60 * 60,
+        14 * 60 * 60,
+        15 * 60 * 60,
+        16 * 60 * 60,
+        17 * 60 * 60,
+        18 * 60 * 60,
+        19 * 60 * 60,
+        20 * 60 * 60,
+        21 * 60 * 60,
+        22 * 60 * 60,
+        23 * 60 * 60
     ]
 
     def __init__(self, bot):
@@ -53,12 +82,8 @@ class ScoreboardFeature(Feature):
 
             now = datetime.utcnow()
             seconds_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
-            print("Time delta: " + str(seconds_since_midnight))
-            print("-" * 40)
             m,s = divmod(seconds_since_midnight, 60)
-            h,m = divmod(m, 60)
-            print("Time since midnight: " + str(h) + " hours, " + str(m) + " min, " + str(s) + "s")
-  
+            h,m = divmod(m, 60)  
             is_in_post_range = False # Whether or not we're within a valid time interval to post the scoreboard
             for post_time in ScoreboardFeature.SCOREBOARD_POST_TIMES:
                 if abs(seconds_since_midnight - post_time) <= ScoreboardFeature.POST_TIME_TOLERANCE:
