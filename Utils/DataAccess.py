@@ -16,14 +16,17 @@ class DataAccess:
         # For this to work, the AWS credentials must be present on the system.
         # This can be done by using "pip install awscli", and then running "aws configure"
         self.dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
+        self.client = boto3.client('dynamodb', region_name='us-east-2')
 
         # Determine if we're using the actual data, or the development data
         if not test_mode:
             self.user_table = self.dynamodb.Table('Users')
             self.tracking_table = self.dynamodb.Table('Tracking')
+            self.top_posts_table = self.dynamodb.Table('TopPosts')
         else:
             self.user_table = self.dynamodb.Table('Users-dev')
             self.tracking_table = self.dynamodb.Table('Tracking-dev')
+            self.top_posts_table = self.dynamodb.Table('TopPosts-dev')
 
 
     def put_item(self, table_id, item):
@@ -117,7 +120,21 @@ class DataAccess:
         try:
             return self.get_table(table_id).scan()
         except Exception as e:
-            message = "Unable to scan table: " + self.tableIdToString(table_id)
+            print("Unable to scan table: " + self.tableIdToString(table_id))
+            print("Error: " + str(e))
+            traceback.print_exc()
+
+    def describe_table(self, table_id):
+        """
+        Gets the table description from the AWS database
+        table_id: One of the IDs defined in the Tables subclass
+        """
+        try:
+            return self.client.describe_table(TableName = self.tableIdToString(table_id))
+        except Exception as e:
+            print("Unable to get table description: " + self.tableIdToString(table_id))
+            print("Error: " + str(e))
+            traceback.print_exc()
 
     
     # Helper function
@@ -126,10 +143,10 @@ class DataAccess:
             return self.user_table
         elif table_id == DataAccess.Tables.TRACKING:
             return self.tracking_table
+        elif table_id == DataAccess.Tables.TOP_POSTS:
+            return self.top_posts_table
         else:
             raise RuntimeError("Bad Table Id: " + str(table_id))
-
-
 
 
     def tableIdToString(self, id):
@@ -141,6 +158,8 @@ class DataAccess:
             return self.user_table.name
         elif id == DataAccess.Tables.TRACKING:
             return self.tracking_table.name
+        elif id == DataAccess.Tables.TOP_POSTS:
+            return self.top_posts_table.name
         else:
             print("Invalid ID for idToString: " + str(id))
             return "unknown"
@@ -151,3 +170,4 @@ class DataAccess:
         """
         USERS = 0
         TRACKING = 1
+        TOP_POSTS = 2

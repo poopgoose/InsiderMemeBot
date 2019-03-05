@@ -11,14 +11,17 @@ import time
 import traceback
 
 from Features.ActivityTracker import ActivityTracker
+from Features.BaseScoringFeature.BaseScoringFeature import BaseScoringFeature
 from Features.ScoreboardFeature.ScoreboardFeature import ScoreboardFeature
+from Features.GiftFeature.GiftFeature import GiftFeature
 
 from Utils.DataAccess import DataAccess
+from boto3.dynamodb.conditions import Key
 import decimal
 
 class InsiderMemeBot:
 
-    VERSION = "1.2" # The version of InsiderMemeBot
+    VERSION = "2.0" # The version of InsiderMemeBot
 
     ID_STORE_LIMIT = 1000 # The number of recent comment/submission IDs stored by the feature
 
@@ -65,7 +68,9 @@ class InsiderMemeBot:
         """
         Initializes the list of Features that the bot will implement
         """
+        self.features.append(BaseScoringFeature(self))
         self.features.append(ScoreboardFeature(self))
+        self.features.append(GiftFeature(self))
         
         
     def run(self):
@@ -84,6 +89,12 @@ class InsiderMemeBot:
                 
                     if self.is_processed_recently(submission):
                         # Skip over anything we've already looked at
+                        continue
+
+                    elif (submission.is_self and not self.test_mode):
+                        # Skip over text-only submisisons (Announcements, etc.)
+                        # Allow processing of text-only submissions in test-mode only
+                        self.mark_item_processed(submission)
                         continue
                             
                     elif self.is_old(submission) or self.did_comment(submission):
@@ -117,6 +128,19 @@ class InsiderMemeBot:
                 traceback.print_exc()    
 
             time.sleep(1)
+
+    ######################## Callbacks ############################
+    def finished_tracking_callback(self, item):
+        """
+        This callback is triggered whenever an item (submission or example)
+        has finished tracking, and has its final score available.
+
+        item: The item from the Tracking database that has finished tracking
+        """
+        for feature in self.features:
+            # Call the handlers
+            feature.on_finished_tracking(item)
+
 
     ##################### Utility Functions #######################
 
@@ -181,6 +205,19 @@ class InsiderMemeBot:
             oldest_id = self.__processed_ids_by_time.pop(0) # Pop oldest comment at 0
             self.__processed_ids_by_hash.remove(oldest_id)
     
+
+    def is_user(self, author):
+        """
+        Returns true if the given author is a user in the DynamoDB database.
+        """
+        
+        # Query the table to get any user with a user_id matching the author's id
+        response = self.data_access.query(DataAccess.Tables.USERS, Key('user_id').eq(author.id))
+        num_matches = len(response['Items'])
+        
+        # If there is a match, then the author is already a user
+        return num_matches > 0
+
     def is_processed_recently(self, obj):
         """
         Returns whether or not the given submission or comment ID was processed by the Feature (Not the entire bot)
