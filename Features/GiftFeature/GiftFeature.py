@@ -121,7 +121,7 @@ class GiftFeature(Feature):
                 m, s = divmod(remaining_time, 60)
                 h, m = divmod(m, 60)
                 self.bot.reply(comment, "You have already sent a gift to " + recipient['username'] + " today!" + \
-                    "You may send another gift in **" + str(h) + "** hours and **" + str(m) + "** minutes.")
+                    " You may send another gift in **" + str(h) + "** hours and **" + str(m) + "** minutes.")
                 return
 
         # Bring the gift amount down to the maximum if it's too high
