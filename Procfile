@@ -1,1 +1,1 @@
-worker: python main.py
+worker: python run_tracker.py & python main.py

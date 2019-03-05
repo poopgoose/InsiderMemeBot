@@ -13,6 +13,12 @@ class Feature:
         self.bot = bot
             
 
+    def update(self):
+        """
+        Called every cycle for the features to perform routine updates
+        """
+        pass
+
     def process_comment(self, comment):
         """
         Processes a new comment
@@ -22,5 +28,13 @@ class Feature:
     def process_submission(self, submission):
         """
         Processes a new submission
+        """
+        pass
+
+    def on_finished_tracking(self, item):
+        """ 
+        Handler function for when a submission or example has finished tracking
+        item: The Item from the Tracking table that has finished tracking, and has the final
+        score available.
         """
         pass
