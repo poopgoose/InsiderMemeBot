@@ -342,7 +342,8 @@ class BaseScoringFeature(Feature):
             'user_id' : redditor.id,
             'username' : redditor.name,
             'submission_score' : 0,
-            'distribution_score' :0
+            'distribution_score' :0,
+            'total_score' : 0
         }
         if self.bot.data_access.put_item(DataAccess.Tables.USERS, new_user_item):
             print("Created user: " + str(redditor))
