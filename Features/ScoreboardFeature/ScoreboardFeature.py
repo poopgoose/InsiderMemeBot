@@ -30,8 +30,7 @@ class ScoreboardFeature(Feature):
     SCOREBOARD_POST_TIMES = \
     [
         0,            # 12AM UTC / 7PM EST
-        12 * 60 * 60, # 12PM UTC / 7AM EST
-        1 * 60 * 60 + 10 * 60
+        12 * 60 * 60 # 12PM UTC / 7AM EST
     ]
 
     def __init__(self, bot):
@@ -45,9 +44,7 @@ class ScoreboardFeature(Feature):
         """
         Updates the scoreboard feature
         """
-        print("Calling Update")
         if time.time() >= self.prev_update_time + ScoreboardFeature.UPDATE_INTERVAL:
-            print("Updating")
             self.__flush_old_items() # Flush out any expired items from the database
 
             now = datetime.utcnow()
@@ -56,14 +53,11 @@ class ScoreboardFeature(Feature):
             h,m = divmod(m, 60)  
             is_in_post_range = False # Whether or not we're within a valid time interval to post the scoreboard
             for post_time in ScoreboardFeature.SCOREBOARD_POST_TIMES:
-                print("RANGE: " + str(abs(seconds_since_midnight - post_time)))
                 if abs(seconds_since_midnight - post_time) <= ScoreboardFeature.POST_TIME_TOLERANCE:
-                    print("In range!")
                     is_in_post_range = True
                     break
 
             if is_in_post_range:
-                print("Is in post range")
                 if not self.already_posted:
                     # We're in range of a target time and haven't posted yet, so post the scoreboard!
                     print("Posting scoreboard...")
