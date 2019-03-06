@@ -31,6 +31,7 @@ class ScoreboardFeature(Feature):
     [
         0,            # 12AM UTC / 7PM EST
         12 * 60 * 60, # 12PM UTC / 7AM EST
+        12 * 60 * 60 + 45 * 60 # 7:45 PM - For debugging
     ]
 
     def __init__(self, bot):
