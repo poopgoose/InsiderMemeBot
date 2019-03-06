@@ -10,7 +10,7 @@ from boto3.dynamodb.conditions import Key, Attr
 import decimal
 
 
-USER_TABLE_NAME = "Users-dev"
+USER_TABLE_NAME = "Users"
 
 
 dynamodb = boto3.resource('dynamodb', region_name='us-east-2')
@@ -19,6 +19,7 @@ users = users_table.scan()['Items']
 
 for user in users:
     if not 'total_score' in user:
+        print("Adding total_score for user: " + str(user))
         # This is an old item, needs to be updated!
         total_score = user['distribution_score'] + user['submission_score']
 
