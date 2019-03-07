@@ -207,7 +207,7 @@ class GiftFeature(Feature):
             "amount" : decimal.Decimal(amount),
             "receive_time" : decimal.Decimal(int(time.time()))
         }
-        updated_receive_dict['received'] = sent_item_dict
+        updated_receive_dict['received'] = receive_item_dict
 
         ### Add to the recipient ###
         recip_key = {'user_id' : recipient['user_id']}
