@@ -10,7 +10,6 @@ from sortedcontainers import SortedSet
 import time
 import traceback
 
-from Features.ActivityTracker import ActivityTracker
 from Features.BaseScoringFeature.BaseScoringFeature import BaseScoringFeature
 from Features.ScoreboardFeature.ScoreboardFeature import ScoreboardFeature
 from Features.GiftFeature.GiftFeature import GiftFeature
