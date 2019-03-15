@@ -16,22 +16,16 @@ class BaseScoringFeature(Feature):
     """
     
     ### Constants ###
-    NEW_SUBMISSION_REPLY = "Thank you for posting your meme template!\n\n" + \
-                           "All bot commands must be *direct* replies to this comment. " + \
+    NEW_SUBMISSION_REPLY = "Thank you for posting your template!\n\n" + \
+                           "I'll check your post periodically for the next 24 hours and update your score. You'll also " + \
+                           "receive a 20% commission from all posted examples!\n\n" + \
                            "\n\n" + \
-                           "**TO DISTRIBUTE THIS TEMPLATE:**\n\n" + \
-                           "Reply with  `!example`, followed by a link to your example post. Only links to posts in other subreddits can be scored. " + \
-                           "Imgur examples are appreciated, but will not give you any points!\n\n" + \
-                           "**RULES FOR DISTRIBUTION:**\n\n" + \
-                           "1. The link you provide after `!example` **MUST** be an actual example of the template. " + \
-                           "Links to unrelated content will be removed by the mods, and repeated offenses " + \
-                           "may result in your score being reset to 0 or being banned from the subreddit.\n\n" + \
-                           "2. Examples must be your own posts to be scored. Links to someone else's posts are okay, but they won't get you any points.\n\n" + \
-                           "3. Example posts must be less than 24 hours old to be scored.\n\n" + \
-                           "\n\n" + \
+                           "Distibutors: Please share your examples by replying to this comment with the `!example` command!\n\n" + \
+                           "*Rules for distribution, and a list of available bot commands, are available on the [wiki](https://www.reddit.com/r/InsiderMemeTrading/wiki/bots).*\n\n" + \
                            "**If your post is not a template, it will be removed.** If you have a post based on an IMT template, " + \
                            "you may be qualified to post it on r/IMTOriginals\n\n\n\n" + \
-                           "[Join us on discord!](https://discordapp.com/invite/q3mtAmj)"
+                           "[Join us on discord!](https://discordapp.com/invite/q3mtAmj)\n\n" + \
+                           "**[The Second Vote Has Begun](https://www.reddit.com/r/InsiderMemeTrading/comments/b1e3wk/imt_vote_2_meta_discussion_point_voting_emergency)**"
 
     # The duration, in seconds, for which to track each post
     TRACK_DURATION_SECONDS = 24 * 60 * 60 # 24 hours (in seconds)
@@ -232,7 +226,7 @@ class BaseScoringFeature(Feature):
         except praw.exceptions.ClientException as e:
             print("Could not get submission from URL: " + example_url)
             self.bot.reply(comment, "Thanks for the example, but I couldn't find any Reddit post " + \
-                "from the URL tht you provided. Only links to example posts on other subreddits can be scored.")
+                "from the URL that you provided. Only links to example posts on other subreddits can be scored.")
             return
 
         print("\n")
@@ -323,7 +317,7 @@ class BaseScoringFeature(Feature):
         except praw.exceptions.ClientException as e:
             print("Could not get submission from URL: " + example_url)
             return(None, "Thanks for the example, but I couldn't find any Reddit post " + \
-                "from the URL tht you provided. Only links to example posts on other subreddits can be scored.")
+                "from the URL that you provided. Only links to example posts on other subreddits can be scored.")
 
         
     ################## Helper functions ##################
