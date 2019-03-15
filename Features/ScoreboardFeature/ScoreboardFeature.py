@@ -67,7 +67,6 @@ class ScoreboardFeature(Feature):
                     print("Time to create scoreboard: " + str(update_end - update_begin) + " seconds.")
                     self.already_posted = True
             else:
-                print("Already posted")
                 self.already_posted = False # Reset until we're in the next valid posting range
             self.prev_update_time = int(time.time())
 
