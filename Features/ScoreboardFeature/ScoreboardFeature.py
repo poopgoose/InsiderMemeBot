@@ -29,9 +29,16 @@ class ScoreboardFeature(Feature):
     # Times, relative to midnight (in seconds) UTC to post the scoreboarddatetime.utcnow
     SCOREBOARD_POST_TIMES = \
     [
-        0,            # 12AM UTC / 7PM EST
-        12 * 60 * 60 # 12PM UTC / 7AM EST
+        11 * 60 * 60, #  11AM UTC / 7AM EST
+        23 * 60 * 60, # 11PM UTC / 7PM EST
+        19 * 60 * 60 + 52 * 60  # DEBUGGING
     ]
+
+    # Number of places to display in the scoreboard
+    SCOREBOARD_PLACES = 100
+
+    # Number of places per scoreboard column
+    PLACES_PER_COLUMN = 10
 
     def __init__(self, bot):
         super(ScoreboardFeature, self).__init__(bot) # Call super constructor
@@ -237,21 +244,21 @@ class ScoreboardFeature(Feature):
 
         scoreboard_text = "#Top Traders\n  " + table_header + "\n|| **OVERALL** |"
         for i in range(0, num_places):
-            row_text = str(i + 1) + " | " + users_by_total[i]['username'] + " | " + str(users_by_total[i]['total_score'])
+            row_text = str(i + 1) + " | " + 'u/' + users_by_total[i]['username'] + " | " + str(users_by_total[i]['total_score'])
             scoreboard_text = scoreboard_text + "\n" + row_text
 
         ### Submission Score ###
         scoreboard_text = scoreboard_text + "\n | |  " + \
             "\n || **TOP SUBMITTERS** |"
         for i in range(0, num_places):
-            row_text = str(i + 1) + " | " + users_by_submission[i]['username'] + " | " + str(users_by_submission[i]['submission_score'])
+            row_text = str(i + 1) + " | " + 'u/' + users_by_submission[i]['username'] + " | " + str(users_by_submission[i]['submission_score'])
             scoreboard_text = scoreboard_text + "\n" + row_text
 
         ### Distribution Score ###
         scoreboard_text = scoreboard_text + "\n | |  " + \
             "\n || **TOP DISTRIBUTORS** |"
         for i in range(0, num_places):
-            row_text = str(i + 1) + " | " + users_by_distribution[i]['username'] + " | " + str(users_by_distribution[i]['distribution_score'])
+            row_text = str(i + 1) + " | " + 'u/' + users_by_distribution[i]['username'] + " | " + str(users_by_distribution[i]['distribution_score'])
             scoreboard_text = scoreboard_text + "\n" + row_text
 
         ### Top posts ###
@@ -295,8 +302,8 @@ class ScoreboardFeature(Feature):
             markup_str = markup_str + "\n" + \
               "**" + str(i + 1) + ":** [" + top_templates[i]['title'] + "](" + top_templates[i]['permalink'] + ") | " + \
               "**" + str(i + 1) + ":** [" + top_examples[i]['title'] + "](" + top_examples[i]['permalink'] + ")\n" + \
-              "&nbsp;" * 4 + "Author: " + top_templates[i]['username'] + " | " + \
-              "&nbsp;" * 4 + "Author: " + top_examples[i]['username'] + "\n" + \
+              "&nbsp;" * 4 + "Author: " + 'u/' + top_templates[i]['username'] + " | " + \
+              "&nbsp;" * 4 + "Author: " + 'u/' + top_examples[i]['username'] + "\n" + \
               "&nbsp;" * 4 + "Score: " + str(top_templates[i]['score']) + " | " + \
               "&nbsp;" * 4 + "Score: " + str(top_examples[i]['score'])
 
