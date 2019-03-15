@@ -74,7 +74,7 @@ class GiftFeature(Feature):
                 return(0, "Thanks for the thought, but I'm a bot and can't accept gifts!")
 
         # 6. Make sure that the gift amount can be parsed from the command
-        gift_regex = "!gift\s+(\d+)\s*$"
+        gift_regex = "!gift\s+(\d+)\s*"
         match = re.match(gift_regex, comment.body)
         if match == None:
             print("GiftFeature: Invalid command: " + comment.body + "   Comment ID: " + comment.id)
@@ -207,7 +207,7 @@ class GiftFeature(Feature):
             "amount" : decimal.Decimal(amount),
             "receive_time" : decimal.Decimal(int(time.time()))
         }
-        updated_receive_dict['received'] = receive_item_dict
+        updated_receive_dict['received'] = sent_item_dict
 
         ### Add to the recipient ###
         recip_key = {'user_id' : recipient['user_id']}
