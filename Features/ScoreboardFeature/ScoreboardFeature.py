@@ -29,16 +29,14 @@ class ScoreboardFeature(Feature):
     # Times, relative to midnight (in seconds) UTC to post the scoreboarddatetime.utcnow
     SCOREBOARD_POST_TIMES = \
     [
-        11 * 60 * 60, #  11AM UTC / 7AM EST
-        23 * 60 * 60, # 11PM UTC / 7PM EST
-        19 * 60 * 60 + 52 * 60  # DEBUGGING
+        11 * 60 * 60, #  11AM UTC / 7AM Eastern
+        23 * 60 * 60 # 11PM UTC / 7PM Eastern
     ]
 
-    # Number of places to display in the scoreboard
-    SCOREBOARD_PLACES = 100
-
-    # Number of places per scoreboard column
-    PLACES_PER_COLUMN = 10
+    # Number of places per scoreboard row and column. The total number of places displayed in the scoreboard
+    # is the number of rows times the number of columns
+    SCOREBOARD_ROWS = 10
+    SCOREBOARD_COLS = 5
 
     def __init__(self, bot):
         super(ScoreboardFeature, self).__init__(bot) # Call super constructor
@@ -231,7 +229,7 @@ class ScoreboardFeature(Feature):
         # The number of users to include in the scoreboard. users_by_total, users_by_submission, and
         # users_by_distribution are all the same length, just different orderings, so we can just use
         # users_by_total to determine the number of places to show
-        num_places = min(len(users_by_total), 10)
+        #num_places = min(len(users_by_total), ScoreboardFeature.SCOREBOARD_PLACES)
 
         #########################################
         ##### Construct the scoreboard text #####
@@ -239,27 +237,20 @@ class ScoreboardFeature(Feature):
 
         ### Overall Score ###
         table_header = \
-        "Ranking | Name | Score\n" + \
-        ":------:|:-----|:-----"
+        "Ranking | Name | Score | " * ScoreboardFeature.SCOREBOARD_COLS + "\n" + \
+        ":------:|:-----|:----- | " * ScoreboardFeature.SCOREBOARD_COLS + "\n"
 
-        scoreboard_text = "#Top Traders\n  " + table_header + "\n|| **OVERALL** |"
-        for i in range(0, num_places):
-            row_text = str(i + 1) + " | " + 'u/' + users_by_total[i]['username'] + " | " + str(users_by_total[i]['total_score'])
-            scoreboard_text = scoreboard_text + "\n" + row_text
+        scoreboard_text = "#TOP TRADERS  \n  ##Overall\n" + table_header
+        for row in range(0, ScoreboardFeature.SCOREBOARD_ROWS):
+            scoreboard_text = scoreboard_text + self.__create_top_user_row_markup(row, "total_score", users_by_total)
 
-        ### Submission Score ###
-        scoreboard_text = scoreboard_text + "\n | |  " + \
-            "\n || **TOP SUBMITTERS** |"
-        for i in range(0, num_places):
-            row_text = str(i + 1) + " | " + 'u/' + users_by_submission[i]['username'] + " | " + str(users_by_submission[i]['submission_score'])
-            scoreboard_text = scoreboard_text + "\n" + row_text
+        scoreboard_text = scoreboard_text + "------\n##Top Crafters\n" + table_header
+        for row in range(0, ScoreboardFeature.SCOREBOARD_ROWS):
+            scoreboard_text = scoreboard_text + self.__create_top_user_row_markup(row, "submission_score", users_by_submission)
 
-        ### Distribution Score ###
-        scoreboard_text = scoreboard_text + "\n | |  " + \
-            "\n || **TOP DISTRIBUTORS** |"
-        for i in range(0, num_places):
-            row_text = str(i + 1) + " | " + 'u/' + users_by_distribution[i]['username'] + " | " + str(users_by_distribution[i]['distribution_score'])
-            scoreboard_text = scoreboard_text + "\n" + row_text
+        scoreboard_text = scoreboard_text + "------\n##Top Distributors\n" + table_header
+        for row in range(0, ScoreboardFeature.SCOREBOARD_ROWS):
+            scoreboard_text = scoreboard_text + self.__create_top_user_row_markup(row, "distribution_score", users_by_distribution)
 
         ### Top posts ###
         scoreboard_text = scoreboard_text + "\n\n" + self.__create_top_post_markup()    
@@ -269,12 +260,34 @@ class ScoreboardFeature(Feature):
             title = title_str,
             selftext = scoreboard_text)
 
+    def __create_top_user_row_markup(self, row_num, rank_key, sorted_users):
+        """
+        Helper function to show the top users in the scoreboard
+        """
+
+        rank_start = row_num # The rank that the row starts with
+        rank_offset = ScoreboardFeature.SCOREBOARD_ROWS # The rank offset per column
+        
+        row_text = ""
+        for i in range(0, ScoreboardFeature.SCOREBOARD_COLS):
+            # It is assumed that the number of places in the printed scoreboard is far lower than
+            # the number of total users with ranking information. Therefore, there is no check
+            # that the indices are out of bounds.
+            ranking = rank_start + i * rank_offset
+            ranking_number_str = str(ranking + 1) if ranking > 0 else str(ranking + 1) + " " + u"\uE10E" # Use the crown emoji for first place
+            row_text = row_text + ranking_number_str + " | u/" + sorted_users[ranking]['username'] + " | " + str(sorted_users[ranking][rank_key]) + " | "
+      
+        row_text = row_text + "\n"
+        return row_text           
+        #    row_text = str(i + 1) + " | " + 'u/' + users_by_total[i]['username'] + " | " + str(users_by_total[i]['total_score'])
+        #    scoreboard_text = scoreboard_text + "\n" + row_text
+
     def __create_top_post_markup(self):
         """
-        Helper function to show the top posts
+        Helper function to show the top posts in the scoreboard
         """
         markup_str = "------\n"
-        markup_str = markup_str + "#Top Posts\n  " 
+        markup_str = markup_str + "#TOP POSTS\n  " 
         markup_str = markup_str + "Templates | Examples\n" + \
                                   ":-------- | :-------\n"
         markup_str = markup_str + self.__create_top_post_list_markup("Yesterday", "last_day") + "\n &nbsp; | \n "

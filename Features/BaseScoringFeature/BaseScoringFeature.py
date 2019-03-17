@@ -256,7 +256,7 @@ class BaseScoringFeature(Feature):
         if url_matches is None or len(url_matches) == 0:
             print("Invalid example: " + comment.body)
             return (None, "Thanks for the example, but I couldn't find any Reddit post " + \
-                "from the URL tht you provided. Only links to example posts on other subreddits can be scored.")
+                "from the URL that you provided. Only links to example posts on other subreddits can be scored.")
             
         # Remove duplicate submissions. This can happen if the actual hyperlink is used as the comment body 
         # TODO: This is a messy workaround. It would be better to use an HTML parser or something to grab
