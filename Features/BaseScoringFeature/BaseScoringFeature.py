@@ -24,9 +24,7 @@ class BaseScoringFeature(Feature):
                            "*Rules for distribution, and a list of available bot commands, are available on the [wiki](https://www.reddit.com/r/InsiderMemeTrading/wiki/bots).*\n\n" + \
                            "**If your post is not a template, it will be removed.** If you have a post based on an IMT template, " + \
                            "you may be qualified to post it on r/IMTOriginals\n\n\n\n" + \
-                           "[Join us on discord!](https://discordapp.com/invite/q3mtAmj)\n\n" + \
-                           "**[The Second Vote Has Begun](https://www.reddit.com/r/InsiderMemeTrading/comments/b1e3wk/imt_vote_2_meta_discussion_point_voting_emergency)**"
-
+                           "[Join us on discord!](https://discordapp.com/invite/q3mtAmj)\n\n"
     # The duration, in seconds, for which to track each post
     TRACK_DURATION_SECONDS = 24 * 60 * 60 # 24 hours (in seconds)
 
