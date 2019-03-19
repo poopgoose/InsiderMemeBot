@@ -146,23 +146,23 @@ class ScoreboardFeature(Feature):
         }
 
         # Return if the post doesn't have a high score for the day
-        if not self.__compare_with_posts(new_top_item, "last_day"):
+        if not self.__compare_with_posts(new_top_item, "scoreboard_top_last_day"):
             return
 
         # After updating the last-day high scores, return if the post isn't a high score for the week
-        if not self.__compare_with_posts(new_top_item, "last_week"):
+        if not self.__compare_with_posts(new_top_item, "scoreboard_top_last_week"):
             return
 
         # After updating the last week high scores, return if the post isn't a high score for the month
-        if not self.__compare_with_posts(new_top_item, "last_month"):
+        if not self.__compare_with_posts(new_top_item, "scoreboard_top_last_month"):
             return
 
         # After updating the last month high scores, return if the post isn't a high score for the year
-        if not self.__compare_with_posts(new_top_item, "last_year"):
+        if not self.__compare_with_posts(new_top_item, "scoreboard_top_last_year"):
             return
 
         # After updating the last year high scores, check and update if the post is a high score of all time
-        self.__compare_with_posts(new_top_item, "all_time")
+        self.__compare_with_posts(new_top_item, "scoreboard_top_all_time")
 
 
     def __compare_with_posts(self, item, key_name):
@@ -178,7 +178,7 @@ class ScoreboardFeature(Feature):
         """
 
         key_expr = Key('key').eq(key_name)
-        top_row = self.bot.data_access.query(DataAccess.Tables.TOP_POSTS, key_expr)['Items'][0]
+        top_row = self.bot.data_access.query(DataAccess.Tables.VARS, key_expr)['Items'][0]
         items_key = 'examples' if item['is_example'] else 'submissions'
 
         # Items, sorted by score (highest first)
@@ -290,11 +290,11 @@ class ScoreboardFeature(Feature):
         markup_str = markup_str + "#TOP POSTS\n  " 
         markup_str = markup_str + "Templates | Examples\n" + \
                                   ":-------- | :-------\n"
-        markup_str = markup_str + self.__create_top_post_list_markup("Yesterday", "last_day") + "\n &nbsp; | \n "
-        markup_str = markup_str + self.__create_top_post_list_markup("This week", "last_week") + "\n &nbsp; |\n "
-        markup_str = markup_str + self.__create_top_post_list_markup("This month", "last_month") + "\n &nbsp; |\n "
-        markup_str = markup_str + self.__create_top_post_list_markup("This Year", "last_year") + "\n &nbsp; |\n "
-        markup_str = markup_str + self.__create_top_post_list_markup("All Time", "all_time") + "\n"
+        markup_str = markup_str + self.__create_top_post_list_markup("Yesterday", "scoreboard_top_last_day") + "\n &nbsp; | \n "
+        markup_str = markup_str + self.__create_top_post_list_markup("This week", "scoreboard_top_last_week") + "\n &nbsp; |\n "
+        markup_str = markup_str + self.__create_top_post_list_markup("This month", "scoreboard_top_last_month") + "\n &nbsp; |\n "
+        markup_str = markup_str + self.__create_top_post_list_markup("This Year", "scoreboard_top_last_year") + "\n &nbsp; |\n "
+        markup_str = markup_str + self.__create_top_post_list_markup("All Time", "scoreboard_top_all_time") + "\n"
         return markup_str
 
     def __create_top_post_list_markup(self, title, key):
@@ -305,7 +305,7 @@ class ScoreboardFeature(Feature):
         """
         markup_str = "**" + title + "** ||"
 
-        top_posts = self.bot.data_access.query(DataAccess.Tables.TOP_POSTS, Key('key').eq(key))['Items'][0]
+        top_posts = self.bot.data_access.query(DataAccess.Tables.VARS, Key('key').eq(key))['Items'][0]
 
         # Examples and Submissions, sorted by score
         top_examples = sorted(top_posts["examples"], key=lambda x: x['score'], reverse=True)
@@ -327,10 +327,10 @@ class ScoreboardFeature(Feature):
         Flushes old items from the TopPosts data table.
         i.e, it will remove a 25-hour old post from the "last_day" list.
         """
-        self.__flush_old_items_from_list("last_day", ScoreboardFeature.LAST_DAY)
-        self.__flush_old_items_from_list("last_week", ScoreboardFeature.LAST_WEEK)
-        self.__flush_old_items_from_list("last_month", ScoreboardFeature.LAST_MONTH)
-        self.__flush_old_items_from_list("last_year", ScoreboardFeature.LAST_YEAR)
+        self.__flush_old_items_from_list("scoreboard_top_last_day", ScoreboardFeature.LAST_DAY)
+        self.__flush_old_items_from_list("scoreboard_top_last_week", ScoreboardFeature.LAST_WEEK)
+        self.__flush_old_items_from_list("scoreboard_top_last_month", ScoreboardFeature.LAST_MONTH)
+        self.__flush_old_items_from_list("scoreboard_top_last_year", ScoreboardFeature.LAST_YEAR)
     def __flush_old_items_from_list(self, key_name, max_age):
         """
         Helper function for __flush_old_items.
@@ -350,14 +350,16 @@ class ScoreboardFeature(Feature):
         }
 
         key_expr = Key('key').eq(key_name)
-        data_row = self.bot.data_access.query(DataAccess.Tables.TOP_POSTS, key_expr)['Items'][0]
+        data_row = self.bot.data_access.query(DataAccess.Tables.VARS, key_expr)['Items'][0]
 
         # Flush examples and submissions
         item_keys = ["submissions", "examples"]
+        updated_lists = []
+        is_updated = False
+
         for item_key in item_keys:
-            item_list = data_row[item_key]
+            item_list = data_row["val"][item_key]
             updated_list = item_list
-            is_updated = False
             for i in range(0, len(item_list)):
                 item = item_list[i]
                 item_age = int(time.time()) - int(item['scoring_time'])
@@ -368,15 +370,21 @@ class ScoreboardFeature(Feature):
                     print("  Age (s): " + str(item_age))
                     updated_list[i] = empty_item
                     is_updated = True
+            updated_lists.append(updated_list)
 
-            if is_updated:
+        if is_updated:
 
-                # Sort the updated list by score, descending
-                updated_list = sorted(updated_list, key=lambda x: x['score'], reverse=True)
+            # Sort the updated lists by score, descending
+            updated_submissions = sorted(updated_lists[0], key=lambda x: x['score'], reverse=True)
+            updated_examples    = sorted(updated_lists[1], key=lambda x: x['score'], reverse=True)
 
-                # Update the database
-                update_key = {'key' : key_name}
-                update_expr = "set " + item_key + " = :updated_items"
-                update_attrs = {":updated_items" : updated_list}
-                self.bot.data_access.update_item(
-                    DataAccess.Tables.TOP_POSTS, update_key, update_expr, update_attrs)
+            updated_item = {
+                "examples" : updated_examples,
+                "submissions" : updated_submissions
+            }
+            # Update the database
+            update_key = {'key' : key_name}
+            update_expr = "set val  = :updated_item"
+            update_attrs = {":updated_item" : updated_item}
+            self.bot.data_access.update_item(
+                DataAccess.Tables.VARS, update_key, update_expr, update_attrs)
