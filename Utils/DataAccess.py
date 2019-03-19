@@ -22,11 +22,11 @@ class DataAccess:
         if not test_mode:
             self.user_table = self.dynamodb.Table('Users')
             self.tracking_table = self.dynamodb.Table('Tracking')
-            self.top_posts_table = self.dynamodb.Table('TopPosts')
+            self.vars_table = self.dynamodb.Table('Vars')
         else:
             self.user_table = self.dynamodb.Table('Users-dev')
             self.tracking_table = self.dynamodb.Table('Tracking-dev')
-            self.top_posts_table = self.dynamodb.Table('TopPosts-dev')
+            self.vars_table = self.dynamodb.Table('Vars-dev')
 
 
     def put_item(self, table_id, item):
@@ -143,8 +143,8 @@ class DataAccess:
             return self.user_table
         elif table_id == DataAccess.Tables.TRACKING:
             return self.tracking_table
-        elif table_id == DataAccess.Tables.TOP_POSTS:
-            return self.top_posts_table
+        elif table_id == DataAccess.Tables.VARS:
+            return self.vars_table
         else:
             raise RuntimeError("Bad Table Id: " + str(table_id))
 
@@ -158,8 +158,8 @@ class DataAccess:
             return self.user_table.name
         elif id == DataAccess.Tables.TRACKING:
             return self.tracking_table.name
-        elif id == DataAccess.Tables.TOP_POSTS:
-            return self.top_posts_table.name
+        elif id == DataAccess.Tables.VARS:
+            return self.vars_table.name
         else:
             print("Invalid ID for idToString: " + str(id))
             return "unknown"
@@ -170,4 +170,4 @@ class DataAccess:
         """
         USERS = 0
         TRACKING = 1
-        TOP_POSTS = 2
+        VARS = 2
