@@ -136,9 +136,14 @@ class InsiderMemeBot:
 
         item: The item from the Tracking database that has finished tracking
         """
-        for feature in self.features:
-            # Call the handlers
-            feature.on_finished_tracking(item)
+        try:
+            for feature in self.features:
+                # Call the handlers
+                feature.on_finished_tracking(item)
+        except Exception as e:
+            print("Error in on_finished_tracking callback")
+            print(e)
+            traceback.print_exc()    
 
 
     ##################### Utility Functions #######################

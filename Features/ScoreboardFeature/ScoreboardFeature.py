@@ -30,7 +30,8 @@ class ScoreboardFeature(Feature):
     SCOREBOARD_POST_TIMES = \
     [
         11 * 60 * 60, #  11AM UTC / 7AM Eastern
-        23 * 60 * 60 # 11PM UTC / 7PM Eastern
+        23 * 60 * 60, # 11PM UTC / 7PM Eastern
+        17 * 60 * 60 + 47 * 60
     ]
 
     # Number of places per scoreboard row and column. The total number of places displayed in the scoreboard
@@ -178,11 +179,12 @@ class ScoreboardFeature(Feature):
         """
 
         key_expr = Key('key').eq(key_name)
-        top_row = self.bot.data_access.query(DataAccess.Tables.VARS, key_expr)['Items'][0]
+        top_list_db_item = self.bot.data_access.query(DataAccess.Tables.VARS, key_expr)['Items'][0]['val']
+        
+        # Whether to look at the examples list or the submissions list in the top_list_db_item
         items_key = 'examples' if item['is_example'] else 'submissions'
-
         # Items, sorted by score (highest first)
-        top_items = sorted(top_row[items_key], key=lambda x: x['score'], reverse=True)
+        top_items = sorted(top_list_db_item[items_key], key=lambda x: x['score'], reverse=True)
         updated_items = top_items
 
         is_updated = False
@@ -202,11 +204,19 @@ class ScoreboardFeature(Feature):
 
         if is_updated:
             # Update the database
+            new_db_item = top_list_db_item
+            if item['is_example']:
+                # The example list was updated
+                new_db_item['examples'] = updated_items
+            else:
+                # The submissions list was updated
+                new_db_item['submissions'] = updated_items
+
             update_key = {'key' : key_name}
-            update_expr = "set " + items_key + " = :updated_items"
-            update_attrs = {":updated_items" : updated_items}
+            update_expr = "set val = :new_db_item"
+            update_attrs = {":new_db_item" : new_db_item}
             self.bot.data_access.update_item(
-                DataAccess.Tables.TOP_POSTS, update_key, update_expr, update_attrs)
+                DataAccess.Tables.VARS, update_key, update_expr, update_attrs)
 
         return is_updated
 
@@ -305,7 +315,7 @@ class ScoreboardFeature(Feature):
         """
         markup_str = "**" + title + "** ||"
 
-        top_posts = self.bot.data_access.query(DataAccess.Tables.VARS, Key('key').eq(key))['Items'][0]
+        top_posts = self.bot.data_access.query(DataAccess.Tables.VARS, Key('key').eq(key))['Items'][0]['val']
 
         # Examples and Submissions, sorted by score
         top_examples = sorted(top_posts["examples"], key=lambda x: x['score'], reverse=True)
