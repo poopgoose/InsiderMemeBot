@@ -30,8 +30,7 @@ class ScoreboardFeature(Feature):
     SCOREBOARD_POST_TIMES = \
     [
         11 * 60 * 60, #  11AM UTC / 7AM Eastern
-        23 * 60 * 60, # 11PM UTC / 7PM Eastern
-        17 * 60 * 60 + 47 * 60
+        23 * 60 * 60 # 11PM UTC / 7PM Eastern
     ]
 
     # Number of places per scoreboard row and column. The total number of places displayed in the scoreboard
