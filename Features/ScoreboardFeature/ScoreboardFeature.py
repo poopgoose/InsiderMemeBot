@@ -17,8 +17,7 @@ class ScoreboardFeature(Feature):
     posting the scoreboard in a comment several times per day
     """
 
-    UPDATE_INTERVAL =  1 * 60 # Update once per minute
-    POST_TIME_TOLERANCE = 2 * 60 # Can post within 2 minutes on either side of the target
+    UPDATE_INTERVAL =  1 * 15 # Update every 60 seconds
 
     # Time interval constants, in seconds
     LAST_DAY = 60 * 60 * 24
@@ -30,8 +29,15 @@ class ScoreboardFeature(Feature):
     SCOREBOARD_POST_TIMES = \
     [
         11 * 60 * 60, #  11AM UTC / 7AM Eastern
-        23 * 60 * 60 # 11PM UTC / 7PM Eastern
+        23 * 60 * 60, # 11PM UTC / 7PM Eastern
+        23 * 60 * 60 + 5 * 60
     ]
+
+    # How long before the scoreboard posting to start preparing the rankings, in seconds
+    RANKING_UPDATE_OFFSET_TIME = 30 * 60 # Half an hour
+
+    # Maximum number of user rankings to update per cycle
+    MAX_UPDATES_PER_CYCLE = 100
 
     # Number of places per scoreboard row and column. The total number of places displayed in the scoreboard
     # is the number of rows times the number of columns
@@ -43,43 +49,124 @@ class ScoreboardFeature(Feature):
 
         self.prev_update_time = 0
         self.timezone = pytz.timezone('US/Eastern')
-        self.already_posted = False # Set to true when a scoreboard has just been posted, so it isn't posted again until the next target time
+       
+        # When the next scoreboard will be posted, and when the rankings will be updated
+        self.next_post_time = self.get_next_post_time()
+        self.next_ranking_update_time = self.next_post_time - ScoreboardFeature.RANKING_UPDATE_OFFSET_TIME
+
+        # Wrap around if the next update time is < 0 seconds from midnight
+        if self.next_ranking_update_time < 0:
+            self.next_ranking_update_time = self.next_ranking_update_time + (24 * 60 * 60)
+
+        self.ranking_update_offset = 0 # The offset for updating rankings on subsequent update cycles
+        self.are_rankings_updated = False # Whether or not the bot is finished processing rankings
+        self.ranking_map = None # The map of user ranking data to update
+        self.user_ids = [] # A list of user IDs with the rankings to update
+
+    def get_next_post_time(self):
+        """
+        Determines the next time that the scoreboard will be posted, in seconds.
+        """
+        now = datetime.utcnow()
+        seconds_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()  
+
+        sorted_post_times = sorted(ScoreboardFeature.SCOREBOARD_POST_TIMES)
+        next_post_time = sorted_post_times[0] # Start with assumption that next post is the first post of the day
+
+        # If the current time falls between two post times, then the second post time will be the next one
+        for i in range(1, len(sorted_post_times)):
+            post_time_1 = sorted_post_times[i - 1]
+            post_time_2 = sorted_post_times[i]
+
+            if seconds_since_midnight > post_time_1 and seconds_since_midnight < post_time_2:
+               next_post_time = post_time_2
+               break
+
+        mins, secs = divmod(next_post_time, 60)
+        hrs, mins = divmod(mins, 60)
+
+        print("Next Post Time: " + str(hrs) + ":" + str(mins))
+        return next_post_time
+
 
     def update(self):
         """
         Updates the scoreboard feature
         """
-        if time.time() >= self.prev_update_time + ScoreboardFeature.UPDATE_INTERVAL:
-            self.__flush_old_items() # Flush out any expired items from the database
+        if time.time() < self.prev_update_time + ScoreboardFeature.UPDATE_INTERVAL:
+            return # Not time to update yet
 
-            now = datetime.utcnow()
-            seconds_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
-            m,s = divmod(seconds_since_midnight, 60)
-            h,m = divmod(m, 60)  
-            is_in_post_range = False # Whether or not we're within a valid time interval to post the scoreboard
-            for post_time in ScoreboardFeature.SCOREBOARD_POST_TIMES:
-                if abs(seconds_since_midnight - post_time) <= ScoreboardFeature.POST_TIME_TOLERANCE:
-                    is_in_post_range = True
-                    break
+        # Perform the update
+        # self.__flush_old_items() # Flush out any expired items from the database
+        
+        now = datetime.utcnow()
+        seconds_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
+        is_in_udpate_range = False # Whether or not we're within a valid time range to begin updating rankings, in preparation of posting the scoreboard
+        is_in_post_range = False # Whether or not we're within a valid time interval to post the scoreboard
 
-            if is_in_post_range:
-                if not self.already_posted:
-                    # We're in range of a target time and haven't posted yet, so post the scoreboard!
-                    print("Posting scoreboard...")
-                    update_begin = int(time.time())
-                    self.post_scoreboard()
-                    update_end = int(time.time())
-                    print("Time to create scoreboard: " + str(update_end - update_begin) + " seconds.")
-                    self.already_posted = True
-            else:
-                self.already_posted = False # Reset until we're in the next valid posting range
-            self.prev_update_time = int(time.time())
 
-    def post_scoreboard(self):
+        if seconds_since_midnight >= self.next_ranking_update_time and not self.are_rankings_updated:
+            # The bot should continue working on updating the rankings in preparation to posting the scoreboard
+
+            # If this is the first cycle updating the rankings, then initialize the map
+            if self.ranking_map == None:
+                self.begin_updating_rankings()
+
+            # Perform the update for this cycle
+            self.do_update_rankings_work()
+
+            # If all of the rankings have been updated, then we are finished!
+            if self.ranking_update_offset >= len(self.ranking_map):
+                self.are_rankings_updated = True
+
+
+        if seconds_since_midnight >= self.next_post_time and self.are_rankings_updated:
+            # The bot has finished updating the rankings, and it's time to post!
+
+            # Post the scoreboard
+            print("Posting scoreboard...")
+            update_begin = int(time.time())
+            self.post_scoreboard()
+            update_end = int(time.time())
+            print("Time to create scoreboard: " + str(update_end - update_begin) + " seconds.")
+
+            ##### Reset for the next post #####
+            self.next_post_time = self.get_next_post_time()
+            self.next_ranking_update_time = self.next_post_time - ScoreboardFeature.RANKING_UPDATE_OFFSET_TIME
+
+            # Wrap around if the next update time is < 0 seconds from midnight
+            if self.next_ranking_update_time < 0:
+                self.next_ranking_update_time = self.next_ranking_update_time + (24 * 60 * 60)
+
+            self.are_rankings_updated = False
+            self.ranking_update_offset = 0
+            self.ranking_map = None
+            self.user_ids = []
+            # It's time to update
+
+            # for post_time in ScoreboardFeature.SCOREBOARD_POST_TIMES:
+
+            #     update_start_time = post_time - RANKING_UPDATE_OFFSET_TIME
+            #     #if seconds_since_midnight - update_start_time >= 0 and seconds_since_midnight  
+            #     #    is_in_update_range = True
+            #     if abs(seconds_since_midnight - post_time) <= ScoreboardFeature.POST_TIME_TOLERANCE:
+            #         is_in_post_range = True
+            #         break
+
+            # if is_in_post_range:
+            #     if not self.already_posted:
+            #         # We're in range of a target time and haven't posted yet, so post the scoreboard!
+
+            #         self.already_posted = True
+            # else:
+            #     self.already_posted = False # Reset until we're in the next valid posting range
+        self.prev_update_time = int(time.time())
+
+    def begin_updating_rankings(self):
         """
-        Posts the Scoreboard to Reddit
+        Begin updating user rankings
         """
-
+        
         # Get the users from the user database
         user_data = self.bot.data_access.scan(DataAccess.Tables.USERS)['Items']
 
@@ -89,10 +176,14 @@ class ScoreboardFeature(Feature):
         users_by_distribution = sorted(user_data, key=lambda x: x['distribution_score'], reverse=True)
 
         # Create the map for each user's rank
-        ranking_map = {}
+        self.ranking_map = {}
+        self.user_ids = []
         for i in range(0, len(users_by_total)):
             user = users_by_total[i]
-            ranking_map[user['user_id']] = {
+
+            self.user_ids.append(user['user_id'])
+
+            self.ranking_map[user['user_id']] = {
                 'total' : decimal.Decimal(i + 1),
                 'submission' : decimal.Decimal(0),
                 'distribution' : decimal.Decimal(0)
@@ -100,21 +191,51 @@ class ScoreboardFeature(Feature):
 
         for i in range(0, len(users_by_submission)):
             user = users_by_submission[i]
-            ranking_map[user['user_id']]['submission'] = decimal.Decimal(i + 1)
+            self.ranking_map[user['user_id']]['submission'] = decimal.Decimal(i + 1)
         for i in range(0, len(users_by_distribution)):
             user = users_by_distribution[i]
-            ranking_map[user['user_id']]['distribution'] = decimal.Decimal(i + 1)
+            self.ranking_map[user['user_id']]['distribution'] = decimal.Decimal(i + 1)
 
-        # Update each User's Rank
-        # NOTE: If posting the scoreboard is slow, it's probably because this loop is causing the 
-        # AWS DynamoDB service to throttle write requests.
-        for user_id in ranking_map:
-            ranking_dict = ranking_map[user_id]
+    def do_update_rankings_work(self):
+        """
+        Do work on updating user rankings.
+        This method allows for smaller numbers of rankings to be updated per cycle, to avoid data throttling.
+        """
+        remaining_rankings = len(self.ranking_map) - self.ranking_update_offset
+        rankings_to_update = min(ScoreboardFeature.MAX_UPDATES_PER_CYCLE, remaining_rankings)
+
+        begin_time = int(time.time())
+        for i in range(0, rankings_to_update):
+            user_id = self.user_ids[i + self.ranking_update_offset]
+            ranking_dict = self.ranking_map[user_id]
             key = {'user_id' : user_id}
             expr = "set ranking = :dict"
             attrs = {":dict" : ranking_dict}
             self.bot.data_access.update_item(DataAccess.Tables.USERS, key, expr, attrs)
-        print("Updated ranking for " + str(len(ranking_map)) + " users.")
+            #print("Updated user " + user_id + "(" + str(i) + ")")
+
+        self.ranking_update_offset = self.ranking_update_offset + rankings_to_update
+
+        end_time = int(time.time())
+        duration = end_time - begin_time
+        print("Updated ranking for " + str(rankings_to_update) + " users. (" + str(duration) + " seconds)")
+        print("Remaining users: " + str(remaining_rankings - rankings_to_update))
+
+    def post_scoreboard(self):
+        """
+        Posts the Scoreboard to Reddit
+        """
+
+        # Update each User's Rank
+        # NOTE: If posting the scoreboard is slow, it's probably because this loop is causing the 
+        # AWS DynamoDB service to throttle write requests.
+        # for user_id in ranking_map:
+        #     ranking_dict = ranking_map[user_id]
+        #     key = {'user_id' : user_id}
+        #     expr = "set ranking = :dict"
+        #     attrs = {":dict" : ranking_dict}
+        #     self.bot.data_access.update_item(DataAccess.Tables.USERS, key, expr, attrs)
+        # print("Updated ranking for " + str(len(ranking_map)) + " users.")
 
 
         # Post the scoreboard
@@ -340,6 +461,7 @@ class ScoreboardFeature(Feature):
         self.__flush_old_items_from_list("scoreboard_top_last_week", ScoreboardFeature.LAST_WEEK)
         self.__flush_old_items_from_list("scoreboard_top_last_month", ScoreboardFeature.LAST_MONTH)
         self.__flush_old_items_from_list("scoreboard_top_last_year", ScoreboardFeature.LAST_YEAR)
+
     def __flush_old_items_from_list(self, key_name, max_age):
         """
         Helper function for __flush_old_items.
