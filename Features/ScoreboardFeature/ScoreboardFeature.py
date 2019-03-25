@@ -17,7 +17,7 @@ class ScoreboardFeature(Feature):
     posting the scoreboard in a comment several times per day
     """
 
-    UPDATE_INTERVAL =  1 * 15 # Update every 60 seconds
+    UPDATE_INTERVAL =  1 * 60 # Update every 60 seconds
 
     # Time interval constants, in seconds
     LAST_DAY = 60 * 60 * 24
@@ -29,8 +29,7 @@ class ScoreboardFeature(Feature):
     SCOREBOARD_POST_TIMES = \
     [
         11 * 60 * 60, #  11AM UTC / 7AM Eastern
-        23 * 60 * 60, # 11PM UTC / 7PM Eastern
-        23 * 60 * 60 + 5 * 60
+        23 * 60 * 60 # 11PM UTC / 7PM Eastern
     ]
 
     # How long before the scoreboard posting to start preparing the rankings, in seconds
@@ -97,8 +96,7 @@ class ScoreboardFeature(Feature):
             return # Not time to update yet
 
         # Perform the update
-        # self.__flush_old_items() # Flush out any expired items from the database
-        
+
         now = datetime.utcnow()
         seconds_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
         is_in_udpate_range = False # Whether or not we're within a valid time range to begin updating rankings, in preparation of posting the scoreboard
@@ -125,10 +123,7 @@ class ScoreboardFeature(Feature):
 
             # Post the scoreboard
             print("Posting scoreboard...")
-            update_begin = int(time.time())
             self.post_scoreboard()
-            update_end = int(time.time())
-            print("Time to create scoreboard: " + str(update_end - update_begin) + " seconds.")
 
             ##### Reset for the next post #####
             self.next_post_time = self.get_next_post_time()
@@ -142,24 +137,7 @@ class ScoreboardFeature(Feature):
             self.ranking_update_offset = 0
             self.ranking_map = None
             self.user_ids = []
-            # It's time to update
 
-            # for post_time in ScoreboardFeature.SCOREBOARD_POST_TIMES:
-
-            #     update_start_time = post_time - RANKING_UPDATE_OFFSET_TIME
-            #     #if seconds_since_midnight - update_start_time >= 0 and seconds_since_midnight  
-            #     #    is_in_update_range = True
-            #     if abs(seconds_since_midnight - post_time) <= ScoreboardFeature.POST_TIME_TOLERANCE:
-            #         is_in_post_range = True
-            #         break
-
-            # if is_in_post_range:
-            #     if not self.already_posted:
-            #         # We're in range of a target time and haven't posted yet, so post the scoreboard!
-
-            #         self.already_posted = True
-            # else:
-            #     self.already_posted = False # Reset until we're in the next valid posting range
         self.prev_update_time = int(time.time())
 
     def begin_updating_rankings(self):
@@ -178,23 +156,32 @@ class ScoreboardFeature(Feature):
         # Create the map for each user's rank
         self.ranking_map = {}
         self.user_ids = []
+
+        # Rank by total score
         for i in range(0, len(users_by_total)):
             user = users_by_total[i]
 
             self.user_ids.append(user['user_id'])
 
             self.ranking_map[user['user_id']] = {
-                'total' : decimal.Decimal(i + 1),
-                'submission' : decimal.Decimal(0),
-                'distribution' : decimal.Decimal(0)
+                'username' : user['username'],
+                'total_score' : user['total_score'],
+                'submission_score' : user['submission_score'],
+                'distribution_score' : user['distribution_score'],
+                'total_rank' : decimal.Decimal(i + 1),
+                'submission_rank' : decimal.Decimal(0),
+                'distribution_rank' : decimal.Decimal(0)
             }
 
+        # By submission score
         for i in range(0, len(users_by_submission)):
             user = users_by_submission[i]
-            self.ranking_map[user['user_id']]['submission'] = decimal.Decimal(i + 1)
+            self.ranking_map[user['user_id']]['submission_rank'] = decimal.Decimal(i + 1)
+
+        # By distribution score
         for i in range(0, len(users_by_distribution)):
             user = users_by_distribution[i]
-            self.ranking_map[user['user_id']]['distribution'] = decimal.Decimal(i + 1)
+            self.ranking_map[user['user_id']]['distribution_rank'] = decimal.Decimal(i + 1)
 
     def do_update_rankings_work(self):
         """
@@ -226,17 +213,11 @@ class ScoreboardFeature(Feature):
         Posts the Scoreboard to Reddit
         """
 
-        # Update each User's Rank
-        # NOTE: If posting the scoreboard is slow, it's probably because this loop is causing the 
-        # AWS DynamoDB service to throttle write requests.
-        # for user_id in ranking_map:
-        #     ranking_dict = ranking_map[user_id]
-        #     key = {'user_id' : user_id}
-        #     expr = "set ranking = :dict"
-        #     attrs = {":dict" : ranking_dict}
-        #     self.bot.data_access.update_item(DataAccess.Tables.USERS, key, expr, attrs)
-        # print("Updated ranking for " + str(len(ranking_map)) + " users.")
-
+        # Get the sorted scores from the map
+        user_keys = list(self.ranking_map.keys())
+        users_by_total = sorted(user_keys, key=lambda x: self.ranking_map[x]['total_rank'])
+        users_by_submission = sorted(user_keys, key=lambda x: self.ranking_map[x]['submission_rank'])
+        users_by_distribution = sorted(user_keys, key=lambda x: self.ranking_map[x]['distribution_rank'])
 
         # Post the scoreboard
         self.__create_scoreboard_comment(users_by_total, users_by_submission, users_by_distribution)
@@ -344,9 +325,9 @@ class ScoreboardFeature(Feature):
         """
         Helper function for update. Creates the comment for the scoreboard
 
-        users_by_total: The list of all users, sorted by total_score, descending
-        users_by_submission: The list of all users, sorted by submission_score, descending
-        users_by_distribution: The list of all users, sorted by distribution score, descending
+        users_by_total: The list of all users IDs, sorted by total_score, descending
+        users_by_submission: The list of all user IDs, sorted by submission_score, descending
+        users_by_distribution: The list of all users IDs, sorted by distribution score, descending
         """
 
         # Create the post title from the timezone
@@ -354,12 +335,7 @@ class ScoreboardFeature(Feature):
         now = datetime.now(tz=self.timezone)
         date_str =  now.strftime("%a, %b %d, %Y:")
         time_str = now.strftime("%I:%M %p %Z")
-        title_str = "SCOREBOARD: " + date_str + "\n\n" + time_str
-
-        # The number of users to include in the scoreboard. users_by_total, users_by_submission, and
-        # users_by_distribution are all the same length, just different orderings, so we can just use
-        # users_by_total to determine the number of places to show
-        #num_places = min(len(users_by_total), ScoreboardFeature.SCOREBOARD_PLACES)
+        title_str = "LEADERBOARD: " + date_str + "\n\n" + time_str
 
         #########################################
         ##### Construct the scoreboard text #####
@@ -372,15 +348,15 @@ class ScoreboardFeature(Feature):
 
         scoreboard_text = "#TOP TRADERS  \n  ##Overall\n" + table_header
         for row in range(0, ScoreboardFeature.SCOREBOARD_ROWS):
-            scoreboard_text = scoreboard_text + self.__create_top_user_row_markup(row, "total_score", users_by_total)
+            scoreboard_text = scoreboard_text + self.__create_top_user_row_markup(row, "total", users_by_total)
 
         scoreboard_text = scoreboard_text + "------\n##Top Crafters\n" + table_header
         for row in range(0, ScoreboardFeature.SCOREBOARD_ROWS):
-            scoreboard_text = scoreboard_text + self.__create_top_user_row_markup(row, "submission_score", users_by_submission)
+            scoreboard_text = scoreboard_text + self.__create_top_user_row_markup(row, "submission", users_by_submission)
 
         scoreboard_text = scoreboard_text + "------\n##Top Distributors\n" + table_header
         for row in range(0, ScoreboardFeature.SCOREBOARD_ROWS):
-            scoreboard_text = scoreboard_text + self.__create_top_user_row_markup(row, "distribution_score", users_by_distribution)
+            scoreboard_text = scoreboard_text + self.__create_top_user_row_markup(row, "distribution", users_by_distribution)
 
         ### Top posts ###
         scoreboard_text = scoreboard_text + "\n\n" + self.__create_top_post_markup()    
@@ -390,10 +366,12 @@ class ScoreboardFeature(Feature):
             title = title_str,
             selftext = scoreboard_text)
 
-    def __create_top_user_row_markup(self, row_num, rank_key, sorted_users):
+    def __create_top_user_row_markup(self, row_num, data_key, sorted_user_ids):
         """
         Helper function to show the top users in the scoreboard
         """
+        rank_key = data_key + "_rank"
+        score_key = data_key + "_score"
 
         rank_start = row_num # The rank that the row starts with
         rank_offset = ScoreboardFeature.SCOREBOARD_ROWS # The rank offset per column
@@ -404,13 +382,13 @@ class ScoreboardFeature(Feature):
             # the number of total users with ranking information. Therefore, there is no check
             # that the indices are out of bounds.
             ranking = rank_start + i * rank_offset
+            user_id = sorted_user_ids[ranking]
+            user = self.ranking_map[user_id]
             ranking_number_str = str(ranking + 1) if ranking > 0 else str(ranking + 1) + " " + u"\uE10E" # Use the crown emoji for first place
-            row_text = row_text + ranking_number_str + " | u/" + sorted_users[ranking]['username'] + " | " + str(sorted_users[ranking][rank_key]) + " | "
+            row_text = row_text + ranking_number_str + " | u/" + user['username'] + " | " + str(user[score_key]) + " | "
       
         row_text = row_text + "\n"
         return row_text           
-        #    row_text = str(i + 1) + " | " + 'u/' + users_by_total[i]['username'] + " | " + str(users_by_total[i]['total_score'])
-        #    scoreboard_text = scoreboard_text + "\n" + row_text
 
     def __create_top_post_markup(self):
         """
