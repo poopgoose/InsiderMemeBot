@@ -99,18 +99,22 @@ class ScoreboardFeature(Feature):
 
         now = datetime.utcnow()
         seconds_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
-        is_in_udpate_range = False # Whether or not we're within a valid time range to begin updating rankings, in preparation of posting the scoreboard
-        is_in_post_range = False # Whether or not we're within a valid time interval to post the scoreboard
 
-
-        if seconds_since_midnight >= self.next_ranking_update_time and not self.are_rankings_updated:
-            # The bot should continue working on updating the rankings in preparation to posting the scoreboard
-
+        if seconds_since_midnight >= self.next_ranking_update_time and \
+           seconds_since_midnight <= ScoreboardFeature.SCOREBOARD_POST_TIMES[-1] and \
+           self.ranking_map == None and \
+           not self.are_rankings_updated:
             # If this is the first cycle updating the rankings, then initialize the map
-            if self.ranking_map == None:
-                self.begin_updating_rankings()
+            # The check for seconds_since_midnight <= SCOREBOARD_POST_TIMES[-1] ensures that we aren't
+            # in between the last post of the day and the first post of the next day.
+            # For example, 11PM would register as >= self.next_ranking_update_time, if the update time was the following day at 7AM.
+            self.begin_updating_rankings()
 
-            # Perform the update for this cycle
+        elif seconds_since_midnight >= self.next_ranking_update_time and \
+            self.ranking_map != None and \
+            not self.are_rankings_updated:
+
+            # The bot should continue working on updating the rankings in preparation to posting the scoreboard.
             self.do_update_rankings_work()
 
             # If all of the rankings have been updated, then we are finished!
