@@ -25,8 +25,7 @@ class BaseScoringFeature(Feature):
                            "*Rules for distribution, and a list of available bot commands, are available on the [wiki](https://www.reddit.com/r/InsiderMemeTrading/wiki/bots).*\n\n" + \
                            "**If your post is not a template, it will be removed.** If you have a post based on an IMT template, " + \
                            "you may be qualified to post it on r/IMTOriginals\n\n\n\n" + \
-                           "[Join us on discord!](https://discordapp.com/invite/q3mtAmj)\n\n" + \
-                           "[**The second vote results are in!**](https://www.reddit.com/r/InsiderMemeTrading/comments/b2h8wp/imts_second_vote_has_come_to_an_end/)\n\n"
+                           "[Join us on discord!](https://discordapp.com/invite/q3mtAmj)\n\n"
     # The duration, in seconds, for which to track each post
     TRACK_DURATION_SECONDS = 24 * 60 * 60 # 24 hours (in seconds)
 
@@ -35,7 +34,6 @@ class BaseScoringFeature(Feature):
 
     # The amount of the distributor's score that goes to the creator
     CREATOR_COMMISSION = 0.20
-    
 
     def __init__(self, bot):
         super(BaseScoringFeature, self).__init__(bot) # Call super constructor
@@ -53,6 +51,12 @@ class BaseScoringFeature(Feature):
             self.create_new_user(submission.author)            
             reply_str = reply_str + "\n\n\n\n*New user created for " + submission.author.name + "*"
         
+        # Add any custom footer if one has been defined in the database
+        custom_footer = self.bot.data_access.get_variable("basescoring_submission_footer")
+        if custom_footer != None and len(custom_footer.strip()) > 0:
+            reply_str = reply_str + "\n\n\n\n" + custom_footer
+
+
         # Reply to the submission
         bot_reply = self.bot.reply(submission, reply_str, is_sticky=True) #submission.reply(reply_str)
 
@@ -136,13 +140,17 @@ class BaseScoringFeature(Feature):
             ##########################################################
             submission_score_from_tracking = 0
             distribution_score_from_tracking = 0
+
+            # Global score multiplier
+            score_multiplier = self.data_access.get_variable("basescoring_multiplier")
+
             response = self.bot.data_access.scan(DataAccess.Tables.TRACKING)
             for item in response['Items']:
                 if item['author_id'] == author_id:
                     if item['is_example']:
-                        distribution_score_from_tracking = distribution_score_from_tracking + int(item['score'])
+                        distribution_score_from_tracking = distribution_score_from_tracking + int(item['score'] * score_multiplier)
                     else:
-                        submission_score_from_tracking = submission_score_from_tracking + int(item['score'])
+                        submission_score_from_tracking = submission_score_from_tracking + int(item['score'] * score_multiplier)
 
             ############################
             ###  Report Total scores ###
@@ -199,10 +207,17 @@ class BaseScoringFeature(Feature):
                 self.bot.reply(comment, "I cannot track examples for templates that have been deleted!")
                 return
 
-            # At this point, the example and the template are both valid.
-            bot_reply = self.bot.reply(comment, "Thank you for the example!\n\n\n\n" + \
+            reply_message = "Thank you for the example!\n\n\n\n" + \
                 "I'll check your post periodically until the example is 24 hours old, and update your score. " + \
-                "A 20% commission will go to the creator of the meme template.")
+                "A 20% commission will go to the creator of the meme template."
+            
+            # Add footer, if any
+            custom_footer = self.bot.data_access.get_variable("basescoring_example_footer")
+            if custom_footer != None and len(custom_footer.strip()) > 0:
+                reply_message = reply_message + "\n\n\n\n" + custom_footer
+
+            # At this point, the example and the template are both valid.
+            bot_reply = self.bot.reply(comment, reply_message)
 
             item = {
                'submission_id' : example_submission.id,
@@ -370,7 +385,6 @@ class BaseScoringFeature(Feature):
             print("[IMT_TEST]:    Reply: " + reply)
 
     def update(self):
-        # TODO - Check if any examples need to be deleted
         cur_time = int(time.time())
         if cur_time - self.last_expire_check < BaseScoringFeature.CHECK_EXPIRED_INTERVAL:
             # Not time to check yet, so just return
@@ -399,15 +413,20 @@ class BaseScoringFeature(Feature):
         ############################################
         ### Update Users database with the score ###
         ############################################
+
         user_key = item['author_id']
-        creator_commission = int(int(round(item['score']) * self.CREATOR_COMMISSION)) # The commision of the score that would go to the creator. Only used when item['is_example'] is True
+        score_multiplier = self.bot.data_access.get_variable("basescoring_multiplier")
+        
+        creator_commission = int(int(round(item['score'] * score_multiplier) * self.CREATOR_COMMISSION)) # The commision of the score that would go to the creator. Only used when item['is_example'] is True
+
         if item['is_example']:
             # For examples, the commission for the template creator needs to be deducted from the score
+
             field_name = 'distribution_score'
-            score = int(item['score']) - creator_commission
+            score = int(item['score'] * score_multiplier) - creator_commission
         else:
             field_name = 'submission_score'
-            score = int(item['score'])
+            score = int(item['score'] * score_multiplier)
 
         # Update the score for the user who submitted the submission/example
         user_key = {'user_id' : item['author_id']}
@@ -450,7 +469,7 @@ class BaseScoringFeature(Feature):
         # Construct the message to update the comment with
         if item['is_example']:
             message = "**Update**\n\nYour example has finished scoring! It received a total of **" + \
-            str(int(item['score'])) + "** points.\n\n"
+            str(int(item['score'] * score_multiplier)) + "** points.\n\n"
             if item['author_id'] != item['template_author_id']:
                 message = message + "You received **" + str(score) + "** points, and **" + \
                  str(creator_commission) + "** of the points went to the creator of the template."
@@ -460,9 +479,13 @@ class BaseScoringFeature(Feature):
                 str(creator_commission) + "** points have gone to your submission score."
         else:
             message ="**Update**\n\nYour template has finished scoring! You received **" + \
-            str(int(item["score"])) + "** points.\n\n*This does not include points gained from " + \
+            str(int(score)) + "** points.\n\n*This does not include points gained from " + \
             "example commissions. Commission scores will be reported in the comments beneath the examples.*"
           
+        if score_multiplier != 1:
+            # Add message that a special multiplier was applied
+            message = message + "\n\n**This item received a " + str(score_multiplier) + "x score multiplier!**"
+
         edited_body = bot_comment.body + "\n\n" + message
         try:
             bot_comment.edit(edited_body)

@@ -48,6 +48,24 @@ class DataAccess:
 
             return False
 
+    def get_item(self, table_id, key):
+        """
+        Gets an item from the AWS database
+        table_id: One of the IDs defined in the Tables subclass
+        key: The boto3 Key item for identifying the item to get
+        """
+        try:
+            return self.get_table(table_id).get_item(Key=key)
+        except Exception as e:
+            message = "Unable to get item!\n" + \
+                "    Table: " + self.tableIdToString(table_id) + "\n" + \
+                "    Key: " + str(key) + "\n"
+            print(message)
+            print("Error: " + str(e))
+            traceback.print_exc()
+            return None
+
+
     def update_item(self, table_id, key, update_expr, expr_attr_vals):
         """
         Updates the item in the database
@@ -59,8 +77,7 @@ class DataAccess:
         Returns whether or not the update was successful
         """
 
-        try:
-            
+        try:            
             response = self.get_table(table_id).update_item(
                 Key=key, UpdateExpression=update_expr, ExpressionAttributeValues=expr_attr_vals)
 
@@ -136,7 +153,25 @@ class DataAccess:
             print("Error: " + str(e))
             traceback.print_exc()
 
-    
+    def get_variable(self, var_name):
+        """
+        Shortcut method for getting the value of a variable defined in the Vars table
+        """
+        key = {"key" : var_name}
+        response = self.get_item(DataAccess.Tables.VARS, key)
+
+        if response != None:
+            print(response)
+            # If the variable doesn't exist, return None
+            if not 'Item' in response:
+                print("No such variable: " + var_name)
+                return None
+            # If the variable exists, return it
+            value = response['Item']['val']
+            return value
+        else:
+            return None
+
     # Helper function
     def get_table(self, table_id):
         if table_id == DataAccess.Tables.USERS:
