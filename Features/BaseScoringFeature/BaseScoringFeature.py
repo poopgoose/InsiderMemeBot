@@ -9,6 +9,7 @@ import re
 import time
 from Utils.DataAccess import DataAccess
 import os
+import traceback
 
 class BaseScoringFeature(Feature):
     """
@@ -157,14 +158,13 @@ class BaseScoringFeature(Feature):
 
             if 'ranking' in user:
                 # There is ranking data from the latest posted Scoreboard, so report that as well
-                print("Ranking Data!")
                 ranking_data = user['ranking']
                 response = self.bot.data_access.describe_table(DataAccess.Tables.USERS)
                 num_users = int(response['Table']['ItemCount'])
                 ranking_str = "**Ranking**\n\n" + \
-                              "&nbsp;" * 4 + "Placed **" + str(ranking_data['submission']) + "** out of **" + str(num_users) + "** for submissions  \n  " + \
-                              "&nbsp;" * 4 + "Placed **" + str(ranking_data['distribution']) + "** out of **" + str(num_users) + "** for distributions  \n  " + \
-                              "&nbsp;" * 4 + "Placed **" + str(ranking_data['total']) + "** out of **" + str(num_users) + "** overall."
+                              "&nbsp;" * 4 + "Placed **" + str(ranking_data['submission_rank']) + "** out of **" + str(num_users) + "** for submissions  \n  " + \
+                              "&nbsp;" * 4 + "Placed **" + str(ranking_data['distribution_rank']) + "** out of **" + str(num_users) + "** for distributions  \n  " + \
+                              "&nbsp;" * 4 + "Placed **" + str(ranking_data['total_rank']) + "** out of **" + str(num_users) + "** overall."
                 reply = reply + "\n\n" + ranking_str
             else:
                 # New users won't have ranking data until the next Scoreboard posting
@@ -177,6 +177,7 @@ class BaseScoringFeature(Feature):
             print("    Comment ID: " + str(comment.id))
             print("    Author: " + str(author_id))
             print("Error: " + str(e))
+            traceback.print_exc()    
 
     def process_example(self, comment):
         """
