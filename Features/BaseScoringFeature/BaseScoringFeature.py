@@ -142,7 +142,7 @@ class BaseScoringFeature(Feature):
             distribution_score_from_tracking = 0
 
             # Global score multiplier
-            score_multiplier = self.data_access.get_variable("basescoring_multiplier")
+            score_multiplier = self.bot.data_access.get_variable("basescoring_multiplier")
 
             response = self.bot.data_access.scan(DataAccess.Tables.TRACKING)
             for item in response['Items']:
