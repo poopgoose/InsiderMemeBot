@@ -5,7 +5,7 @@ from PRAW
 """
 import os
 import praw
-from Tracker.Tracker import Tracker
+from Tracker import Tracker
 
 
 ###########################
