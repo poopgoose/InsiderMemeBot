@@ -13,6 +13,7 @@ import traceback
 from Features.BaseScoringFeature.BaseScoringFeature import BaseScoringFeature
 from Features.ScoreboardFeature.ScoreboardFeature import ScoreboardFeature
 from Features.GiftFeature.GiftFeature import GiftFeature
+from Features.TemplateRequestFeature.TemplateRequestFeature import TemplateRequestFeature
 
 from Utils.DataAccess import DataAccess
 from boto3.dynamodb.conditions import Key
@@ -70,6 +71,7 @@ class InsiderMemeBot:
         self.features.append(BaseScoringFeature(self))
         self.features.append(ScoreboardFeature(self))
         self.features.append(GiftFeature(self))
+        self.features.append(TemplateRequestFeature(self))
         
         
     def run(self):
@@ -109,16 +111,21 @@ class InsiderMemeBot:
 
                 ### Get new comments and process them ###
                 for comment in self.subreddit.comments(limit=10):
-                    if self.is_processed_recently(comment):
-                        continue
-                    # Ignore own comments, old comments, and comments already replied to
-                    elif comment.author.id == self.my_id or \
-                    self.is_old(comment) or self.did_reply(comment):
-                        self.mark_item_processed(comment)
-                        continue
+                    try:
+                        if self.is_processed_recently(comment):
+                            continue
+                        # Ignore own comments, old comments, and comments already replied to
+                        elif comment.author.id == self.my_id or \
+                        self.is_old(comment) or self.did_reply(comment):
+                            self.mark_item_processed(comment)
+                            continue
 
-                    for feature in self.features:
-                        feature.process_comment(comment)
+                        for feature in self.features:
+                            feature.process_comment(comment)
+                    except Exception as e:
+                        print("Unable to process comment: " + str(comment))
+                        print(e)
+                        traceback.print_exc()  
 
                     self.mark_item_processed(comment)
 
