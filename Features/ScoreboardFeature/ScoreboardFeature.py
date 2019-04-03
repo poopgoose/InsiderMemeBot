@@ -17,8 +17,7 @@ class ScoreboardFeature(Feature):
     posting the scoreboard in a comment several times per day
     """
 
-    UPDATE_INTERVAL =  1 * 60 # Update once per minute
-    POST_TIME_TOLERANCE = 2 * 60 # Can post within 2 minutes on either side of the target
+    UPDATE_INTERVAL =  1 * 60 # Update every 60 seconds
 
     # Time interval constants, in seconds
     LAST_DAY = 60 * 60 * 24
@@ -33,6 +32,12 @@ class ScoreboardFeature(Feature):
         23 * 60 * 60 # 11PM UTC / 7PM Eastern
     ]
 
+    # How long before the scoreboard posting to start preparing the rankings, in seconds
+    RANKING_UPDATE_OFFSET_TIME = 30 * 60 # Half an hour
+
+    # Maximum number of user rankings to update per cycle
+    MAX_UPDATES_PER_CYCLE = 100
+
     # Number of places per scoreboard row and column. The total number of places displayed in the scoreboard
     # is the number of rows times the number of columns
     SCOREBOARD_ROWS = 10
@@ -43,43 +48,107 @@ class ScoreboardFeature(Feature):
 
         self.prev_update_time = 0
         self.timezone = pytz.timezone('US/Eastern')
-        self.already_posted = False # Set to true when a scoreboard has just been posted, so it isn't posted again until the next target time
+       
+        # When the next scoreboard will be posted, and when the rankings will be updated
+        self.next_post_time = self.get_next_post_time()
+        self.next_ranking_update_time = self.next_post_time - ScoreboardFeature.RANKING_UPDATE_OFFSET_TIME
+
+        # Wrap around if the next update time is < 0 seconds from midnight
+        if self.next_ranking_update_time < 0:
+            self.next_ranking_update_time = self.next_ranking_update_time + (24 * 60 * 60)
+
+        self.ranking_update_offset = 0 # The offset for updating rankings on subsequent update cycles
+        self.are_rankings_updated = False # Whether or not the bot is finished processing rankings
+        self.ranking_map = None # The map of user ranking data to update
+        self.user_ids = [] # A list of user IDs with the rankings to update
+
+    def get_next_post_time(self):
+        """
+        Determines the next time that the scoreboard will be posted, in seconds.
+        """
+        now = datetime.utcnow()
+        seconds_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()  
+
+        sorted_post_times = sorted(ScoreboardFeature.SCOREBOARD_POST_TIMES)
+        next_post_time = sorted_post_times[0] # Start with assumption that next post is the first post of the day
+
+        # If the current time falls between two post times, then the second post time will be the next one
+        for i in range(1, len(sorted_post_times)):
+            post_time_1 = sorted_post_times[i - 1]
+            post_time_2 = sorted_post_times[i]
+
+            if seconds_since_midnight > post_time_1 and seconds_since_midnight < post_time_2:
+               next_post_time = post_time_2
+               break
+
+        mins, secs = divmod(next_post_time, 60)
+        hrs, mins = divmod(mins, 60)
+
+        print("Next Post Time: " + str(hrs) + ":" + str(mins))
+        return next_post_time
+
 
     def update(self):
         """
         Updates the scoreboard feature
         """
-        if time.time() >= self.prev_update_time + ScoreboardFeature.UPDATE_INTERVAL:
-            self.__flush_old_items() # Flush out any expired items from the database
+        if time.time() < self.prev_update_time + ScoreboardFeature.UPDATE_INTERVAL:
+            return # Not time to update yet
 
-            now = datetime.utcnow()
-            seconds_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
-            m,s = divmod(seconds_since_midnight, 60)
-            h,m = divmod(m, 60)  
-            is_in_post_range = False # Whether or not we're within a valid time interval to post the scoreboard
-            for post_time in ScoreboardFeature.SCOREBOARD_POST_TIMES:
-                if abs(seconds_since_midnight - post_time) <= ScoreboardFeature.POST_TIME_TOLERANCE:
-                    is_in_post_range = True
-                    break
+        # Perform the update
 
-            if is_in_post_range:
-                if not self.already_posted:
-                    # We're in range of a target time and haven't posted yet, so post the scoreboard!
-                    print("Posting scoreboard...")
-                    update_begin = int(time.time())
-                    self.post_scoreboard()
-                    update_end = int(time.time())
-                    print("Time to create scoreboard: " + str(update_end - update_begin) + " seconds.")
-                    self.already_posted = True
-            else:
-                self.already_posted = False # Reset until we're in the next valid posting range
-            self.prev_update_time = int(time.time())
+        now = datetime.utcnow()
+        seconds_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds()
 
-    def post_scoreboard(self):
+        if seconds_since_midnight >= self.next_ranking_update_time and \
+           seconds_since_midnight <= ScoreboardFeature.SCOREBOARD_POST_TIMES[-1] and \
+           self.ranking_map == None and \
+           not self.are_rankings_updated:
+            # If this is the first cycle updating the rankings, then initialize the map
+            # The check for seconds_since_midnight <= SCOREBOARD_POST_TIMES[-1] ensures that we aren't
+            # in between the last post of the day and the first post of the next day.
+            # For example, 11PM would register as >= self.next_ranking_update_time, if the update time was the following day at 7AM.
+            self.begin_updating_rankings()
+
+        elif seconds_since_midnight >= self.next_ranking_update_time and \
+            self.ranking_map != None and \
+            not self.are_rankings_updated:
+
+            # The bot should continue working on updating the rankings in preparation to posting the scoreboard.
+            self.do_update_rankings_work()
+
+            # If all of the rankings have been updated, then we are finished!
+            if self.ranking_update_offset >= len(self.ranking_map):
+                self.are_rankings_updated = True
+
+
+        if seconds_since_midnight >= self.next_post_time and self.are_rankings_updated:
+            # The bot has finished updating the rankings, and it's time to post!
+
+            # Post the scoreboard
+            print("Posting scoreboard...")
+            self.post_scoreboard()
+
+            ##### Reset for the next post #####
+            self.next_post_time = self.get_next_post_time()
+            self.next_ranking_update_time = self.next_post_time - ScoreboardFeature.RANKING_UPDATE_OFFSET_TIME
+
+            # Wrap around if the next update time is < 0 seconds from midnight
+            if self.next_ranking_update_time < 0:
+                self.next_ranking_update_time = self.next_ranking_update_time + (24 * 60 * 60)
+
+            self.are_rankings_updated = False
+            self.ranking_update_offset = 0
+            self.ranking_map = None
+            self.user_ids = []
+
+        self.prev_update_time = int(time.time())
+
+    def begin_updating_rankings(self):
         """
-        Posts the Scoreboard to Reddit
+        Begin updating user rankings
         """
-
+        
         # Get the users from the user database
         user_data = self.bot.data_access.scan(DataAccess.Tables.USERS)['Items']
 
@@ -89,33 +158,70 @@ class ScoreboardFeature(Feature):
         users_by_distribution = sorted(user_data, key=lambda x: x['distribution_score'], reverse=True)
 
         # Create the map for each user's rank
-        ranking_map = {}
+        self.ranking_map = {}
+        self.user_ids = []
+
+        # Rank by total score
         for i in range(0, len(users_by_total)):
             user = users_by_total[i]
-            ranking_map[user['user_id']] = {
-                'total' : decimal.Decimal(i + 1),
-                'submission' : decimal.Decimal(0),
-                'distribution' : decimal.Decimal(0)
+
+            self.user_ids.append(user['user_id'])
+
+            self.ranking_map[user['user_id']] = {
+                'username' : user['username'],
+                'total_score' : user['total_score'],
+                'submission_score' : user['submission_score'],
+                'distribution_score' : user['distribution_score'],
+                'total_rank' : decimal.Decimal(i + 1),
+                'submission_rank' : decimal.Decimal(0),
+                'distribution_rank' : decimal.Decimal(0)
             }
 
+        # By submission score
         for i in range(0, len(users_by_submission)):
             user = users_by_submission[i]
-            ranking_map[user['user_id']]['submission'] = decimal.Decimal(i + 1)
+            self.ranking_map[user['user_id']]['submission_rank'] = decimal.Decimal(i + 1)
+
+        # By distribution score
         for i in range(0, len(users_by_distribution)):
             user = users_by_distribution[i]
-            ranking_map[user['user_id']]['distribution'] = decimal.Decimal(i + 1)
+            self.ranking_map[user['user_id']]['distribution_rank'] = decimal.Decimal(i + 1)
 
-        # Update each User's Rank
-        # NOTE: If posting the scoreboard is slow, it's probably because this loop is causing the 
-        # AWS DynamoDB service to throttle write requests.
-        for user_id in ranking_map:
-            ranking_dict = ranking_map[user_id]
+    def do_update_rankings_work(self):
+        """
+        Do work on updating user rankings.
+        This method allows for smaller numbers of rankings to be updated per cycle, to avoid data throttling.
+        """
+        remaining_rankings = len(self.ranking_map) - self.ranking_update_offset
+        rankings_to_update = min(ScoreboardFeature.MAX_UPDATES_PER_CYCLE, remaining_rankings)
+
+        begin_time = int(time.time())
+        for i in range(0, rankings_to_update):
+            user_id = self.user_ids[i + self.ranking_update_offset]
+            ranking_dict = self.ranking_map[user_id]
             key = {'user_id' : user_id}
             expr = "set ranking = :dict"
             attrs = {":dict" : ranking_dict}
             self.bot.data_access.update_item(DataAccess.Tables.USERS, key, expr, attrs)
-        print("Updated ranking for " + str(len(ranking_map)) + " users.")
+            #print("Updated user " + user_id + "(" + str(i) + ")")
 
+        self.ranking_update_offset = self.ranking_update_offset + rankings_to_update
+
+        end_time = int(time.time())
+        duration = end_time - begin_time
+        print("Updated ranking for " + str(rankings_to_update) + " users. (" + str(duration) + " seconds)")
+        print("Remaining users: " + str(remaining_rankings - rankings_to_update))
+
+    def post_scoreboard(self):
+        """
+        Posts the Scoreboard to Reddit
+        """
+
+        # Get the sorted scores from the map
+        user_keys = list(self.ranking_map.keys())
+        users_by_total = sorted(user_keys, key=lambda x: self.ranking_map[x]['total_rank'])
+        users_by_submission = sorted(user_keys, key=lambda x: self.ranking_map[x]['submission_rank'])
+        users_by_distribution = sorted(user_keys, key=lambda x: self.ranking_map[x]['distribution_rank'])
 
         # Post the scoreboard
         self.__create_scoreboard_comment(users_by_total, users_by_submission, users_by_distribution)
@@ -146,23 +252,23 @@ class ScoreboardFeature(Feature):
         }
 
         # Return if the post doesn't have a high score for the day
-        if not self.__compare_with_posts(new_top_item, "last_day"):
+        if not self.__compare_with_posts(new_top_item, "scoreboard_top_last_day"):
             return
 
         # After updating the last-day high scores, return if the post isn't a high score for the week
-        if not self.__compare_with_posts(new_top_item, "last_week"):
+        if not self.__compare_with_posts(new_top_item, "scoreboard_top_last_week"):
             return
 
         # After updating the last week high scores, return if the post isn't a high score for the month
-        if not self.__compare_with_posts(new_top_item, "last_month"):
+        if not self.__compare_with_posts(new_top_item, "scoreboard_top_last_month"):
             return
 
         # After updating the last month high scores, return if the post isn't a high score for the year
-        if not self.__compare_with_posts(new_top_item, "last_year"):
+        if not self.__compare_with_posts(new_top_item, "scoreboard_top_last_year"):
             return
 
         # After updating the last year high scores, check and update if the post is a high score of all time
-        self.__compare_with_posts(new_top_item, "all_time")
+        self.__compare_with_posts(new_top_item, "scoreboard_top_all_time")
 
 
     def __compare_with_posts(self, item, key_name):
@@ -178,11 +284,12 @@ class ScoreboardFeature(Feature):
         """
 
         key_expr = Key('key').eq(key_name)
-        top_row = self.bot.data_access.query(DataAccess.Tables.TOP_POSTS, key_expr)['Items'][0]
+        top_list_db_item = self.bot.data_access.query(DataAccess.Tables.VARS, key_expr)['Items'][0]['val']
+        
+        # Whether to look at the examples list or the submissions list in the top_list_db_item
         items_key = 'examples' if item['is_example'] else 'submissions'
-
         # Items, sorted by score (highest first)
-        top_items = sorted(top_row[items_key], key=lambda x: x['score'], reverse=True)
+        top_items = sorted(top_list_db_item[items_key], key=lambda x: x['score'], reverse=True)
         updated_items = top_items
 
         is_updated = False
@@ -202,11 +309,19 @@ class ScoreboardFeature(Feature):
 
         if is_updated:
             # Update the database
+            new_db_item = top_list_db_item
+            if item['is_example']:
+                # The example list was updated
+                new_db_item['examples'] = updated_items
+            else:
+                # The submissions list was updated
+                new_db_item['submissions'] = updated_items
+
             update_key = {'key' : key_name}
-            update_expr = "set " + items_key + " = :updated_items"
-            update_attrs = {":updated_items" : updated_items}
+            update_expr = "set val = :new_db_item"
+            update_attrs = {":new_db_item" : new_db_item}
             self.bot.data_access.update_item(
-                DataAccess.Tables.TOP_POSTS, update_key, update_expr, update_attrs)
+                DataAccess.Tables.VARS, update_key, update_expr, update_attrs)
 
         return is_updated
 
@@ -214,9 +329,9 @@ class ScoreboardFeature(Feature):
         """
         Helper function for update. Creates the comment for the scoreboard
 
-        users_by_total: The list of all users, sorted by total_score, descending
-        users_by_submission: The list of all users, sorted by submission_score, descending
-        users_by_distribution: The list of all users, sorted by distribution score, descending
+        users_by_total: The list of all users IDs, sorted by total_score, descending
+        users_by_submission: The list of all user IDs, sorted by submission_score, descending
+        users_by_distribution: The list of all users IDs, sorted by distribution score, descending
         """
 
         # Create the post title from the timezone
@@ -224,12 +339,7 @@ class ScoreboardFeature(Feature):
         now = datetime.now(tz=self.timezone)
         date_str =  now.strftime("%a, %b %d, %Y:")
         time_str = now.strftime("%I:%M %p %Z")
-        title_str = "SCOREBOARD: " + date_str + "\n\n" + time_str
-
-        # The number of users to include in the scoreboard. users_by_total, users_by_submission, and
-        # users_by_distribution are all the same length, just different orderings, so we can just use
-        # users_by_total to determine the number of places to show
-        #num_places = min(len(users_by_total), ScoreboardFeature.SCOREBOARD_PLACES)
+        title_str = "LEADERBOARD: " + date_str + "\n\n" + time_str
 
         #########################################
         ##### Construct the scoreboard text #####
@@ -242,15 +352,15 @@ class ScoreboardFeature(Feature):
 
         scoreboard_text = "#TOP TRADERS  \n  ##Overall\n" + table_header
         for row in range(0, ScoreboardFeature.SCOREBOARD_ROWS):
-            scoreboard_text = scoreboard_text + self.__create_top_user_row_markup(row, "total_score", users_by_total)
+            scoreboard_text = scoreboard_text + self.__create_top_user_row_markup(row, "total", users_by_total)
 
         scoreboard_text = scoreboard_text + "------\n##Top Crafters\n" + table_header
         for row in range(0, ScoreboardFeature.SCOREBOARD_ROWS):
-            scoreboard_text = scoreboard_text + self.__create_top_user_row_markup(row, "submission_score", users_by_submission)
+            scoreboard_text = scoreboard_text + self.__create_top_user_row_markup(row, "submission", users_by_submission)
 
         scoreboard_text = scoreboard_text + "------\n##Top Distributors\n" + table_header
         for row in range(0, ScoreboardFeature.SCOREBOARD_ROWS):
-            scoreboard_text = scoreboard_text + self.__create_top_user_row_markup(row, "distribution_score", users_by_distribution)
+            scoreboard_text = scoreboard_text + self.__create_top_user_row_markup(row, "distribution", users_by_distribution)
 
         ### Top posts ###
         scoreboard_text = scoreboard_text + "\n\n" + self.__create_top_post_markup()    
@@ -260,10 +370,12 @@ class ScoreboardFeature(Feature):
             title = title_str,
             selftext = scoreboard_text)
 
-    def __create_top_user_row_markup(self, row_num, rank_key, sorted_users):
+    def __create_top_user_row_markup(self, row_num, data_key, sorted_user_ids):
         """
         Helper function to show the top users in the scoreboard
         """
+        rank_key = data_key + "_rank"
+        score_key = data_key + "_score"
 
         rank_start = row_num # The rank that the row starts with
         rank_offset = ScoreboardFeature.SCOREBOARD_ROWS # The rank offset per column
@@ -274,13 +386,13 @@ class ScoreboardFeature(Feature):
             # the number of total users with ranking information. Therefore, there is no check
             # that the indices are out of bounds.
             ranking = rank_start + i * rank_offset
+            user_id = sorted_user_ids[ranking]
+            user = self.ranking_map[user_id]
             ranking_number_str = str(ranking + 1) if ranking > 0 else str(ranking + 1) + " " + u"\uE10E" # Use the crown emoji for first place
-            row_text = row_text + ranking_number_str + " | u/" + sorted_users[ranking]['username'] + " | " + str(sorted_users[ranking][rank_key]) + " | "
+            row_text = row_text + ranking_number_str + " | u/" + user['username'] + " | " + str(user[score_key]) + " | "
       
         row_text = row_text + "\n"
         return row_text           
-        #    row_text = str(i + 1) + " | " + 'u/' + users_by_total[i]['username'] + " | " + str(users_by_total[i]['total_score'])
-        #    scoreboard_text = scoreboard_text + "\n" + row_text
 
     def __create_top_post_markup(self):
         """
@@ -290,11 +402,11 @@ class ScoreboardFeature(Feature):
         markup_str = markup_str + "#TOP POSTS\n  " 
         markup_str = markup_str + "Templates | Examples\n" + \
                                   ":-------- | :-------\n"
-        markup_str = markup_str + self.__create_top_post_list_markup("Yesterday", "last_day") + "\n &nbsp; | \n "
-        markup_str = markup_str + self.__create_top_post_list_markup("This week", "last_week") + "\n &nbsp; |\n "
-        markup_str = markup_str + self.__create_top_post_list_markup("This month", "last_month") + "\n &nbsp; |\n "
-        markup_str = markup_str + self.__create_top_post_list_markup("This Year", "last_year") + "\n &nbsp; |\n "
-        markup_str = markup_str + self.__create_top_post_list_markup("All Time", "all_time") + "\n"
+        markup_str = markup_str + self.__create_top_post_list_markup("Yesterday", "scoreboard_top_last_day") + "\n &nbsp; | \n "
+        markup_str = markup_str + self.__create_top_post_list_markup("This week", "scoreboard_top_last_week") + "\n &nbsp; |\n "
+        markup_str = markup_str + self.__create_top_post_list_markup("This month", "scoreboard_top_last_month") + "\n &nbsp; |\n "
+        markup_str = markup_str + self.__create_top_post_list_markup("This Year", "scoreboard_top_last_year") + "\n &nbsp; |\n "
+        markup_str = markup_str + self.__create_top_post_list_markup("All Time", "scoreboard_top_all_time") + "\n"
         return markup_str
 
     def __create_top_post_list_markup(self, title, key):
@@ -305,7 +417,7 @@ class ScoreboardFeature(Feature):
         """
         markup_str = "**" + title + "** ||"
 
-        top_posts = self.bot.data_access.query(DataAccess.Tables.TOP_POSTS, Key('key').eq(key))['Items'][0]
+        top_posts = self.bot.data_access.query(DataAccess.Tables.VARS, Key('key').eq(key))['Items'][0]['val']
 
         # Examples and Submissions, sorted by score
         top_examples = sorted(top_posts["examples"], key=lambda x: x['score'], reverse=True)
@@ -327,10 +439,11 @@ class ScoreboardFeature(Feature):
         Flushes old items from the TopPosts data table.
         i.e, it will remove a 25-hour old post from the "last_day" list.
         """
-        self.__flush_old_items_from_list("last_day", ScoreboardFeature.LAST_DAY)
-        self.__flush_old_items_from_list("last_week", ScoreboardFeature.LAST_WEEK)
-        self.__flush_old_items_from_list("last_month", ScoreboardFeature.LAST_MONTH)
-        self.__flush_old_items_from_list("last_year", ScoreboardFeature.LAST_YEAR)
+        self.__flush_old_items_from_list("scoreboard_top_last_day", ScoreboardFeature.LAST_DAY)
+        self.__flush_old_items_from_list("scoreboard_top_last_week", ScoreboardFeature.LAST_WEEK)
+        self.__flush_old_items_from_list("scoreboard_top_last_month", ScoreboardFeature.LAST_MONTH)
+        self.__flush_old_items_from_list("scoreboard_top_last_year", ScoreboardFeature.LAST_YEAR)
+
     def __flush_old_items_from_list(self, key_name, max_age):
         """
         Helper function for __flush_old_items.
@@ -350,14 +463,16 @@ class ScoreboardFeature(Feature):
         }
 
         key_expr = Key('key').eq(key_name)
-        data_row = self.bot.data_access.query(DataAccess.Tables.TOP_POSTS, key_expr)['Items'][0]
+        data_row = self.bot.data_access.query(DataAccess.Tables.VARS, key_expr)['Items'][0]
 
         # Flush examples and submissions
         item_keys = ["submissions", "examples"]
+        updated_lists = []
+        is_updated = False
+
         for item_key in item_keys:
-            item_list = data_row[item_key]
+            item_list = data_row["val"][item_key]
             updated_list = item_list
-            is_updated = False
             for i in range(0, len(item_list)):
                 item = item_list[i]
                 item_age = int(time.time()) - int(item['scoring_time'])
@@ -368,15 +483,21 @@ class ScoreboardFeature(Feature):
                     print("  Age (s): " + str(item_age))
                     updated_list[i] = empty_item
                     is_updated = True
+            updated_lists.append(updated_list)
 
-            if is_updated:
+        if is_updated:
 
-                # Sort the updated list by score, descending
-                updated_list = sorted(updated_list, key=lambda x: x['score'], reverse=True)
+            # Sort the updated lists by score, descending
+            updated_submissions = sorted(updated_lists[0], key=lambda x: x['score'], reverse=True)
+            updated_examples    = sorted(updated_lists[1], key=lambda x: x['score'], reverse=True)
 
-                # Update the database
-                update_key = {'key' : key_name}
-                update_expr = "set " + item_key + " = :updated_items"
-                update_attrs = {":updated_items" : updated_list}
-                self.bot.data_access.update_item(
-                    DataAccess.Tables.TOP_POSTS, update_key, update_expr, update_attrs)
+            updated_item = {
+                "examples" : updated_examples,
+                "submissions" : updated_submissions
+            }
+            # Update the database
+            update_key = {'key' : key_name}
+            update_expr = "set val  = :updated_item"
+            update_attrs = {":updated_item" : updated_item}
+            self.bot.data_access.update_item(
+                DataAccess.Tables.VARS, update_key, update_expr, update_attrs)

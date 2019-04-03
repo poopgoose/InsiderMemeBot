@@ -20,7 +20,7 @@ import decimal
 
 class InsiderMemeBot:
 
-    VERSION = "2.1" # The version of InsiderMemeBot
+    VERSION = "2.2" # The version of InsiderMemeBot
 
     ID_STORE_LIMIT = 1000 # The number of recent comment/submission IDs stored by the feature
 
@@ -136,9 +136,14 @@ class InsiderMemeBot:
 
         item: The item from the Tracking database that has finished tracking
         """
-        for feature in self.features:
-            # Call the handlers
-            feature.on_finished_tracking(item)
+        try:
+            for feature in self.features:
+                # Call the handlers
+                feature.on_finished_tracking(item)
+        except Exception as e:
+            print("Error in on_finished_tracking callback")
+            print(e)
+            traceback.print_exc()    
 
 
     ##################### Utility Functions #######################
