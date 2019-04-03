@@ -172,6 +172,17 @@ class DataAccess:
         else:
             return None
 
+    def set_variable(self, var_name, var_value):
+        """
+        Shortcut method for setting the value of a variable defined in the Vars table
+        """
+        item = {
+            "key" : var_name,
+            "val" : var_value
+        }
+        self.put_item(DataAccess.Tables.VARS, item)
+
+
     # Helper function
     def get_table(self, table_id):
         if table_id == DataAccess.Tables.USERS:
