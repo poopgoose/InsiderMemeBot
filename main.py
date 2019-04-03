@@ -16,7 +16,7 @@ reddit = praw.Reddit(client_id = os.environ['IMT_CLIENT_ID'],
                      user_agent="InsiderMemeBotScript by " + os.environ['IMT_USERNAME'],
                      username=os.environ['IMT_USERNAME'])
 
-TEST_MODE = os.environ['IMT_TEST_MODE'] == "true"
+TEST_MODE = os.environ['IMT_TEST_MODE'] != "false"
 
 # Create a new instance of InsiderMemeBot.
 bot = InsiderMemeBot(reddit, TEST_MODE)

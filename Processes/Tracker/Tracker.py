@@ -60,7 +60,7 @@ class Tracker:
             for item in response['Items']:
                 tracked_items.append(item)
         except Exception as e:
-            print("Could not load tracking  data!")
+            print("Could not load tracking data!")
             print(e)
             return
 
