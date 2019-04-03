@@ -93,6 +93,12 @@ class TemplateRequestListener:
             print("Author: " + str(request_comment.author))
             print("=" * 40)
 
+            # Respond to the comment
+            request_comment.reply(
+                "Your template request has been received by r/InsiderMemeTrading!\n\n" + \
+                "I will update this comment and send a message to your inbox when the request is fulfilled."
+            )
+
 
     def __start__(self):
         """
