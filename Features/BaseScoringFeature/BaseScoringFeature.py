@@ -305,6 +305,11 @@ class BaseScoringFeature(Feature):
             submission_id = praw.models.Submission.id_from_url(example_url)
             submission = self.bot.reddit.submission(id=submission_id)
 
+            #Verify that the example is not the submission itself
+            if(comment.submission.id == submission.id):
+                print ("Example submission is the submitted template")
+                return(None, "The example is the post itself. Please use a different example!")
+
             if submission.author is None:
                 print("Submission has been deleted: " + str(submission))
                 return(None, "The example that you posted has been deleted, so I cannot track it!")
