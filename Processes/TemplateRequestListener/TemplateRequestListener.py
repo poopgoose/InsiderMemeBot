@@ -73,18 +73,50 @@ class TemplateRequestListener:
                         traceback.print_exc()
                         self.mark_item_processed(comment)
 
-
             time.sleep(1)
 
     def process_request(self, request_comment):
 
-        comment_id = request_comment.id
         active_requests = self.data_access.get_variable("templaterequest_active_requests")
+        pending_requests = self.data_access.get_variable("templaterequest_pending_requests")
+        #fulfilled_requests = self.data_access.get_variable("templaterequest_filled_requests") TODO
+        fulfilled_requests = []
 
-        # If not already in the database, add the request to be picked up by InsiderMemeBot's RequestFeature
-        if not comment_id in active_requests:
-            active_requests.append(comment_id)
-            self.data_access.set_variable("templaterequest_active_requests", active_requests)
+        comment_id = request_comment.id
+        submission_id = request_comment.submission.id
+
+
+        # Case 1: There is already a pending request for the requested template
+        if submission_id in pending_requests:
+            request_dict = pending_requests[submission_id]
+            request_dict["requestor_ids"].append(request_comment.author.id)
+            request_dict["requestor_names"].append(request_comment.author.name)
+            request_dict["requestor_comments"].append(request_comment.id)
+            pending_requests[submission_id] = request_dict
+
+            self.data_access.set_variable("templaterequest_pending_requests", pending_requests)
+            
+        # Case 2: There is already an active request for the template
+        elif submission_id in active_requests:
+            pass # TODO
+        # Case 3: There is a completed request for the requested template
+        elif submission_id in fulfilled_requests:
+            pass # TODO
+        # Case 4: This is a new request
+        else:
+            request_dict = {
+                "requestor_ids" : [request_comment.author.id],
+                "requestor_names" : [request_comment.author.name],
+                "requestor_comments" : [request_comment.id],
+                "created_utc" : decimal.Decimal(request_comment.created_utc),
+                "permalink" : request_comment.permalink,
+                "submission_title" : request_comment.submission.title,
+                "subreddit_name" : request_comment.subreddit.name
+            }
+
+            pending_requests[submission_id] = request_dict # Key by the submission ID
+
+            self.data_access.set_variable("templaterequest_pending_requests", pending_requests)
 
 
             print("=" * 40)
