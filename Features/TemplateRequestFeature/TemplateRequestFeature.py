@@ -71,7 +71,9 @@ class TemplateRequestFeature(Feature):
         num_requests = len(pending_requests)
 
         print("Processing " + str(num_requests) + " template requests")
-        #if num_requests == 1:
+
+        # Get the current active requests. We will append all of the pending requests to this dict
+        active_requests = self.bot.data_access.get_variable("templaterequest_active_requests")
 
         # Create a cross-post for each request
         for submission_id in pending_requests:
@@ -82,39 +84,20 @@ class TemplateRequestFeature(Feature):
             # Crosspost the post to the IMT subreddit
             request_submission = submission.crosspost(
                 self.bot.subreddit,
-                title = "New template request from r/" + request_dict["subreddit_name"] + "!")            
+                title = "New template request from r/" + str(request_dict["subreddit_name"]) + "!")
 
             request_submission.mod.flair(text='Template Request')
+
+            # Create an entry in active_requests
+            active_request_dict = request_dict
+            active_request_dict["imt_request_submission_id"] = request_submission.id
+            active_request_dict["imt_request_submission_title"] = request_submission.title
+
+            active_requests[submission_id] = active_request_dict
+
+        # Update the active requests
+        self.bot.data_access.set_variable("templaterequest_active_requests", active_requests)
+        self.bot.data_access.set_variable("templaterequest_pending_requests", {})
+
         self.prev_pending_requests_post_time = time.time()
-        # else:
-        #     # Create a text post containing links to each request
-        #     post_title = str(num_requests) + " new template requests!"
-
-        #     post_body = ""
-        #     for submission_id in pending_requests:
-        #         request_dict = pending_requests[submission_id]
-
-        #         users = list(set(request_dict['requestor_names'])) # Convert to set to get just unique values
-        #         if len(users) == 1:
-        #             users_string = users[0]
-        #         elif len(users) == 2:
-        #             users_string = users[0] + " and " + users[1]
-        #         else:
-        #             # 3 or more users
-        #             for user in users[:-1]:
-        #                 users_string = user + ", "
-        #             users_string += "and " + users[-1]
-                
-
-        #         post_body += "[{0}]({1}) from r/{2}, requested by u/{3} Reward: {4}  Filled: No\n\n".format(
-        #             request_dict['submission_title'],
-        #             request_dict['permalink'],
-        #             request_dict['subreddit_name'],
-        #             users_string,
-        #             str(TemplateRequestFeature.REQUEST_REWARD))
-
-        
-            # Post the template request
-            #request_submission = self.bot.subreddit.submit(post_title, selftext=post_body, flair_id=self.flair_id)
-
 

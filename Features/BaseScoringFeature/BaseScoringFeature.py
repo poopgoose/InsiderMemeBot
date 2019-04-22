@@ -41,6 +41,12 @@ class BaseScoringFeature(Feature):
         self.last_expire_check = 0 # The last time that we checked for expired submissions
 
     def process_submission(self, submission):
+
+        # Ignore conditions
+        if submission.author.id == self.bot.my_id:
+            print("Ignoring own submission: " + submission.title)
+            return
+
         # The sticky reply to respond with
         reply_str = BaseScoringFeature.NEW_SUBMISSION_REPLY
 
