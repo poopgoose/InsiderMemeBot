@@ -26,6 +26,9 @@ class TemplateRequestListener:
         self.data_access = DataAccess(test_mode)
         self.my_id = self.reddit.user.me().id
 
+        self.imt_subreddit_name = "InsiderMemeBot_Test" if test_mode else "InsiderMemeTrading"
+        self.imt_subreddit = self.reddit.subreddit(self.imt_subreddit_name)
+
 
         # Store the IDs of the last 1000 comments that the RequestListener has processed.
 
@@ -95,10 +98,19 @@ class TemplateRequestListener:
             pending_requests[submission_id] = request_dict
 
             self.data_access.set_variable("templaterequest_pending_requests", pending_requests)
+
+            # Respond to the comment
+            request_comment.reply(
+                "There is already an open request for this template. I will notify you when it is fullfiled!"
+            )
             
         # Case 2: There is already an active request for the template
         elif submission_id in active_requests:
-            pass # TODO
+
+            # Respond to the comment
+            request_comment.reply(
+                "There is already an open request for this template. I will notify you when it is fullfiled!"
+            )
         # Case 3: There is a completed request for the requested template
         elif submission_id in fulfilled_requests:
             pass # TODO

@@ -39,6 +39,10 @@ class TemplateRequestFeature(Feature):
         # a submission has been posted to the subreddit with the request information.
         self.active_requests = {}
 
+        # Get the flair ID
+        self.flair_id = self.bot.data_access.get_variable("templaterequest_flair_id")
+
+
     def update(self):
         """
         Updates the template request feature
@@ -47,15 +51,13 @@ class TemplateRequestFeature(Feature):
         if cur_time < self.prev_update_time + TemplateRequestFeature.UPDATE_INTERVAL:
             return # Not time to update yet
 
-        print("Updating Template Request Feature!")
-
         # Update the pending requests.
         # A pending request means it has been registered in the AWS Database,
         # but InsiderMemeBot has yet to create a comment with the request information.
         # Once the request comment is posted, the request is removed from the pending request
         # list, and added to the active requests list.
         # The pending requests are stored as a dictionary, keyed by the requested Submission IDs
-        if cur_time < self.prev_pending_requests_post_time + TemplateRequestFeature.PENDING_REQUESTS_POST_INTERVAL:
+        if cur_time >= self.prev_pending_requests_post_time + TemplateRequestFeature.PENDING_REQUESTS_POST_INTERVAL:
             pending_requests = self.bot.data_access.get_variable("templaterequest_pending_requests")
             if len(pending_requests) > 0:
                 self.process_pending_requests(pending_requests)
@@ -66,29 +68,53 @@ class TemplateRequestFeature(Feature):
         """
         Processes the pending requests from the !IMTRequest command.
         """
-
         num_requests = len(pending_requests)
 
-        if num_requests == 1:
-            # Create a post for a single request
-            comment_id = pending_requests.keys()[0]
-            request_dict = pending_requests[comment_id]
+        print("Processing " + str(num_requests) + " template requests")
+        #if num_requests == 1:
+
+        # Create a cross-post for each request
+        for submission_id in pending_requests:
+            request_dict = pending_requests[submission_id]
             subreddit_name = request_dict["subreddit_name"]
+            submission = self.bot.reddit.submission(id=submission_id)
 
-            post_title = "New template request from r/" + request_dict["subreddit_name"] + "!"
-            post_body = "TODO"
-        else:
-            # Create a post for multiple requests
-            post_title = str(num_requests) + " new template requests!"
+            # Crosspost the post to the IMT subreddit
+            request_submission = submission.crosspost(
+                self.bot.subreddit,
+                title = "New template request from r/" + request_dict["subreddit_name"] + "!")            
 
-            post_body = "TODO"
-            #for submission_id in pending_requests:
-            #    request_dict = pending_requests[submisison_id]
-
-            #    post_body = "[{}]({}) from r/{}, requested by u/{} Reward: {}  Filled: No".format(
-            #    )
-
-
-
-
+            request_submission.mod.flair(text='Template Request')
         self.prev_pending_requests_post_time = time.time()
+        # else:
+        #     # Create a text post containing links to each request
+        #     post_title = str(num_requests) + " new template requests!"
+
+        #     post_body = ""
+        #     for submission_id in pending_requests:
+        #         request_dict = pending_requests[submission_id]
+
+        #         users = list(set(request_dict['requestor_names'])) # Convert to set to get just unique values
+        #         if len(users) == 1:
+        #             users_string = users[0]
+        #         elif len(users) == 2:
+        #             users_string = users[0] + " and " + users[1]
+        #         else:
+        #             # 3 or more users
+        #             for user in users[:-1]:
+        #                 users_string = user + ", "
+        #             users_string += "and " + users[-1]
+                
+
+        #         post_body += "[{0}]({1}) from r/{2}, requested by u/{3} Reward: {4}  Filled: No\n\n".format(
+        #             request_dict['submission_title'],
+        #             request_dict['permalink'],
+        #             request_dict['subreddit_name'],
+        #             users_string,
+        #             str(TemplateRequestFeature.REQUEST_REWARD))
+
+        
+            # Post the template request
+            #request_submission = self.bot.subreddit.submit(post_title, selftext=post_body, flair_id=self.flair_id)
+
+
