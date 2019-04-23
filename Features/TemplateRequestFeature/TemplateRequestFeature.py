@@ -9,6 +9,7 @@ from Utils.DataAccess import DataAccess
 import math
 import os
 import re
+import Utils.Parsing
 
 class TemplateRequestFeature(Feature):
     """
@@ -35,10 +36,6 @@ class TemplateRequestFeature(Feature):
         self.prev_update_time = 0 # The time that the bot previously ran its update loop
         self.prev_pending_requests_post_time = 0 # The time that the bot previously posted pending template requests
 
-        # An active request is one that has already been received by the bot, and 
-        # a submission has been posted to the subreddit with the request information.
-        self.active_requests = {}
-
         # Get the flair ID
         self.flair_id = self.bot.data_access.get_variable("templaterequest_flair_id")
 
@@ -63,6 +60,20 @@ class TemplateRequestFeature(Feature):
                 self.process_pending_requests(pending_requests)
 
         self.prev_update_time = int(time.time())
+
+    def process_comment(self, comment):
+        """
+        Processes comments
+        """
+
+        if self.is_active_request_reply(comment):
+            # The comment was a reply to an active request
+            self.process_active_reply(comment)
+
+        elif self.is_fulfilled_request_reply(comment):
+            # The comment was a reply to a fulfilled request
+            self.process_fulfilled_reply(comment)
+
 
     def process_pending_requests(self, pending_requests):
         """
@@ -104,7 +115,7 @@ class TemplateRequestFeature(Feature):
                 active_request_dict = request_dict
                 active_request_dict["imt_bot_comment_id"] = bot_comment.id
                 active_request_dict["imt_request_submission_id"] = request_submission.id
-                active_request_dict["imt_request_submission_title"] = request_submission.title
+                active_reuest_dict["imt_request_submission_title"] = request_submission.title
 
                 active_requests[submission_id] = active_request_dict
             except Exception as e:
@@ -114,6 +125,56 @@ class TemplateRequestFeature(Feature):
         # Update the active requests
         self.bot.data_access.set_variable("templaterequest_active_requests", active_requests)
         self.bot.data_access.set_variable("templaterequest_pending_requests", {})
-
         self.prev_pending_requests_post_time = time.time()
 
+    def process_active_reply(self, comment):
+        """
+        Processes a reply made to the bot in an active template request post
+        """
+        
+        comment_str = comment.body.strip()
+        if not comment_str.lower().startswith("!template"):
+            return # Nothing to process, since the reply wasn't a command
+
+        urls = Utils.Parsing.get_urls(comment_str)
+        print("URLS: " + str(urls))
+
+        
+    def process_fulfilled_reply(self, comment):
+        """
+        Processes a reply made to the bot in a template request post that has already been filled
+        """
+        pass # TODO
+
+    def is_active_request_reply(self, comment):
+        """
+        Returns true if the comment is a reply to the bot on an active template request post
+        """
+        active_requests = self.bot.data_access.get_variable("templaterequest_active_requests")
+        active_ids = []
+        for request_dict in active_requests.values():
+            active_ids.append(request_dict["imt_request_submission_id"])
+
+        print("Active IDs: " + str(active_ids))
+        return self.__is_request_reply(comment, active_ids)
+
+    def is_fulfilled_request_reply(self, comment):
+        """
+        Returns true if the comment is a reply to the bot's sticky post on a fulfilled request
+        """
+        fulfilled_ids = [] # TODO
+        return self.__is_request_reply(comment, fulfilled_ids)
+
+    def __is_request_reply(self, comment, request_submission_ids):
+        """
+        Helper method for is_active_request_reply and is_fulfilled_request_reply
+        """
+        if comment.parent().author == None:
+            return False # Author can be none if a comment was deleted somehow, so add a check just to be safe
+        elif comment.parent().author.id != self.bot.reddit.user.me().id:
+            return False # The reply wasn't made to the bot
+        else:
+            # Return true if the comment is a reply to the bot, and the comment's submission is one of the requests in the given list
+            submission_id = comment.submission.id
+            print("Submission ID: " + str(submission_id))
+            return submission_id in request_submission_ids
