@@ -123,7 +123,7 @@ class TemplateRequestListener:
                 "created_utc" : decimal.Decimal(request_comment.created_utc),
                 "permalink" : request_comment.permalink,
                 "submission_title" : request_comment.submission.title,
-                "subreddit_name" : request_comment.subreddit.name
+                "subreddit_name" : request_comment.subreddit.display_name
             }
 
             pending_requests[submission_id] = request_dict # Key by the submission ID

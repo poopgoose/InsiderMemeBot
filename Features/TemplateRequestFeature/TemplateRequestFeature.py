@@ -77,23 +77,39 @@ class TemplateRequestFeature(Feature):
 
         # Create a cross-post for each request
         for submission_id in pending_requests:
-            request_dict = pending_requests[submission_id]
-            subreddit_name = request_dict["subreddit_name"]
-            submission = self.bot.reddit.submission(id=submission_id)
+            try:
+                request_dict = pending_requests[submission_id]
+                subreddit_name = request_dict["subreddit_name"]
+                submission = self.bot.reddit.submission(id=submission_id)
 
-            # Crosspost the post to the IMT subreddit
-            request_submission = submission.crosspost(
-                self.bot.subreddit,
-                title = "New template request from r/" + str(request_dict["subreddit_name"]) + "!")
+                # Crosspost the post to the IMT subreddit
+                request_submission = submission.crosspost(
+                    self.bot.subreddit,
+                    title = "New template request from r/" + str(request_dict["subreddit_name"]) + "!")
 
-            request_submission.mod.flair(text='Template Request')
+                request_submission.mod.flair(text='Template Request')
 
-            # Create an entry in active_requests
-            active_request_dict = request_dict
-            active_request_dict["imt_request_submission_id"] = request_submission.id
-            active_request_dict["imt_request_submission_title"] = request_submission.title
+                # Add the sticky comment to the submission
+                reply_msg = "A template has been requested for this meme!\n\n" + \
+                            "Original Post: [" + request_dict["submission_title"] + "](" + request_dict["permalink"] + ")\n\n\n\n" + \
+                            "To supply a template, repond to this comment with the '!template' command, followed by a link to the template.\n\n\n\n" + \
+                            "Example:\n\n `!template https://imgur.com/...`\n\n\n\n" + \
+                            "The first user to fulfill the request will receive **" + str(TemplateRequestFeature.REQUEST_REWARD) + "** points.\n\n\n\n" + \
+                            "*Your link MUST be to the requested template, or it will be removed! Repeated incorrect templates can result in your score " + \
+                            "being reset to 0 or getting banned!*"
 
-            active_requests[submission_id] = active_request_dict
+                bot_comment = self.bot.reply(request_submission, reply_msg, is_sticky=True)
+
+                # Create an entry in active_requests
+                active_request_dict = request_dict
+                active_request_dict["imt_bot_comment_id"] = bot_comment.id
+                active_request_dict["imt_request_submission_id"] = request_submission.id
+                active_request_dict["imt_request_submission_title"] = request_submission.title
+
+                active_requests[submission_id] = active_request_dict
+            except Exception as e:
+                print("!!!! Unable to process request!   Submission ID: " + str(submission_id))
+                print(e)
 
         # Update the active requests
         self.bot.data_access.set_variable("templaterequest_active_requests", active_requests)
