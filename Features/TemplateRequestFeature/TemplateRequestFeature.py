@@ -131,13 +131,23 @@ class TemplateRequestFeature(Feature):
         """
         Processes a reply made to the bot in an active template request post
         """
-        
         comment_str = comment.body.strip()
         if not comment_str.lower().startswith("!template"):
             return # Nothing to process, since the reply wasn't a command
 
         urls = Utils.Parsing.get_urls(comment_str)
-        print("URLS: " + str(urls))
+
+        # Make sure that exactly 1 unique URL was provided
+        if len(urls) == 0:
+            self.bot.reply(comment, "I couldn't detect any URLs in the template you provided! Please try again " + \
+                "with a valid URL.")
+            return
+        elif len(urls) > 1:
+            self.bot.reply(comment, "I detected more than one URL in your template command, so I can't determine " + \
+                "which URL belongs to the template. Please try again with just a single URL!")
+            return
+        else:
+            print("Success!") # TODO
 
         
     def process_fulfilled_reply(self, comment):
