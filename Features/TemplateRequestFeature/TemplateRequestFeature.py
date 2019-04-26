@@ -39,6 +39,12 @@ class TemplateRequestFeature(Feature):
         # Get the flair ID
         self.flair_id = self.bot.data_access.get_variable("templaterequest_flair_id")
 
+        # Get the mods to notify for when a template request is made or fulfilled
+        notified_names = self.bot.data_access.get_variable("templaterequest_notified_mods")
+        self.notified_mods = []
+        for name in notified_names:
+            self.notified_mods.append(self.bot.reddit.redditor(name))
+
 
     def update(self):
         """
@@ -58,6 +64,9 @@ class TemplateRequestFeature(Feature):
             pending_requests = self.bot.data_access.get_variable("templaterequest_pending_requests")
             if len(pending_requests) > 0:
                 self.process_pending_requests(pending_requests)
+
+        # Check inbox to see if any mods have approved of any submitted requests
+        self.check_inbox()      
 
         self.prev_update_time = int(time.time())
 
@@ -147,7 +156,28 @@ class TemplateRequestFeature(Feature):
                 "which URL belongs to the template. Please try again with just a single URL!")
             return
         else:
-            print("Success!") # TODO
+            # The command was formatted correctly!
+
+            # Notify the mods
+            notification_subj = "Fulfilled template request <{}>".format(comment.id)
+            notification_msg = "A [template request]({}) has been fulfilled by u/{}!\n\n " + \
+                "Please respond to this message with \n\n`!approve`\n\n to approve this template." + \
+                "Respond with \n\n`!approve user`\n\n to approve this template and all future template " + \
+                "requests fulfilled by this user.\n\n" + \
+                "To reject the template, respond to this message with \n\n`!reject <message>`\n\n, where `message` " + \
+                "is optional feedback to give to the user.\n\n" + \
+                "Example:\n\n`!reject The template you supplied is valid, but we don't approve of links to that website`\n\n" + \
+                "Everything below this line is used by the bot."
+
+            notification_msg = notification_msg.format(comment.permalink, comment.author.name)
+            for redditor in self.notified_mods:
+                msg = redditor.message(notification_subj, notification_msg)
+                print("Sent message: " + str(msg))
+                print(vars(msg))
+
+
+            #self.bot.reply(comment, "Thanks for submitting the template! A moderator will be back shortly ")
+            #print("Success!") # TODO
 
         
     def process_fulfilled_reply(self, comment):
@@ -188,3 +218,15 @@ class TemplateRequestFeature(Feature):
             submission_id = comment.submission.id
             print("Submission ID: " + str(submission_id))
             return submission_id in request_submission_ids
+
+    def check_inbox(self):
+        """
+        Checks the inbox to see if any mods have approved of a template request fulfillment
+        """
+        inbox = self.bot.reddit.inbox
+
+        #for message in inbox.messages(limit=20):
+        #    print(vars(message))
+        #    print(message.subject)
+        #    print(message.body)
+        #    print("-" * 40)
