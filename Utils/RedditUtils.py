@@ -15,3 +15,5 @@ def is_moderator(subreddit, user):
 	"""
     modlist = subreddit.moderator(redditor=user)
     return len(modlist) > 0
+
+    

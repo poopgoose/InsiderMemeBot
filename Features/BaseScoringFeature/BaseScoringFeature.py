@@ -53,8 +53,8 @@ class BaseScoringFeature(Feature):
         bot_reply = None
 
         # Create an account for the user if they don't have one
-        if not self.bot.is_user(submission.author):
-            self.create_new_user(submission.author)            
+        if not self.bot.data_access.is_user(submission.author):
+            self.bot.data_access.create_new_user(submission.author)            
             reply_str = reply_str + "\n\n\n\n*New user created for " + submission.author.name + "*"
         
         # Add any custom footer if one has been defined in the database
@@ -107,12 +107,12 @@ class BaseScoringFeature(Feature):
     
     def process_new(self, comment):
         author = comment.author
-        if self.bot.is_user(author):
+        if self.bot.data_access.is_user(author):
             # The user already has an account
             self.bot.reply(comment, "There is already an account for " + author.name)
             return
 
-        if self.create_new_user(author):
+        if self.bot.data_access.create_new_user(author):
             # Respond to the comment that the account was created
             self.bot.reply(comment, "New user registered for " + author.name) 
         else:
@@ -267,7 +267,7 @@ class BaseScoringFeature(Feature):
         """
 
         # First, check to see if the submitter is a user
-        if not self.bot.is_user(comment.author):
+        if not self.bot.data_access.is_user(comment.author):
             print("No account for user: " + str(comment.author.name))
             return (None, "You don't have an account yet!\n\nReply with '!new' to create one.")
 
@@ -339,33 +339,6 @@ class BaseScoringFeature(Feature):
             print("Could not get submission from URL: " + example_url)
             return(None, "Thanks for the example, but I couldn't find any Reddit post " + \
                 "from the URL that you provided. Only links to example posts on other subreddits can be scored.")
-
-        
-    ################## Helper functions ##################
-    def create_new_user(self, redditor):
-        """
-        Creates a new user for the comment author.
-        Returns True if successful, false otherwise
-
-        redditor: The Redditor instance to make a user for
-        """
-        
-        # If we get here, then the user doesn't have an account already, so we create one
-        print("Creating user: " + str(redditor))
-
-        new_user_item = {
-            'user_id' : redditor.id,
-            'username' : redditor.name,
-            'submission_score' : 0,
-            'distribution_score' :0,
-            'total_score' : 0
-        }
-        if self.bot.data_access.put_item(DataAccess.Tables.USERS, new_user_item):
-            print("Created user: " + str(redditor))
-            return True
-        else:
-            print("Failed to create user: " + str(redditor))
-            return False
 
     def is_direct_reply(self, comment):
         """

@@ -28,6 +28,9 @@ class DataAccess:
             self.tracking_table = self.dynamodb.Table('Tracking-dev')
             self.vars_table = self.dynamodb.Table('Vars-dev')
 
+    ###########################################################################
+    ###                         CORE FUNCTIONS                              ###
+    ###########################################################################
 
     def put_item(self, table_id, item):
         """
@@ -153,6 +156,11 @@ class DataAccess:
             print("Error: " + str(e))
             traceback.print_exc()
 
+
+    #############################################################################
+    ###                      CONVENIENCE FUNCTIONS                            ###
+    #############################################################################
+
     def get_variable(self, var_name):
         """
         Shortcut method for getting the value of a variable defined in the Vars table
@@ -181,6 +189,45 @@ class DataAccess:
         }
         self.put_item(DataAccess.Tables.VARS, item)
 
+    def create_new_user(self, redditor):
+        """
+        Creates a new user for the Redditor
+        Returns True if successful, false otherwise
+
+        redditor: The Redditor instance to make a user for
+        """
+        print("Creating user: " + str(redditor))
+
+        new_user_item = {
+            'user_id' : redditor.id,
+            'username' : redditor.name,
+            'submission_score' : 0,
+            'distribution_score' :0,
+            'total_score' : 0
+        }
+        if self.put_item(DataAccess.Tables.USERS, new_user_item):
+            print("Created user: " + str(redditor))
+            return True
+        else:
+            print("Failed to create user: " + str(redditor))
+            return False
+
+
+    def is_user(self, author):
+        """
+        Returns true if the given author is a user in the DynamoDB database.
+        """
+        
+        # Query the table to get any user with a user_id matching the author's id
+        response = self.query(DataAccess.Tables.USERS, Key('user_id').eq(author.id))
+        num_matches = len(response['Items'])
+        
+        # If there is a match, then the author is already a user
+        return num_matches > 0
+
+    ###########################################################################
+    ###                    Private Helper Functions                         ###
+    ###########################################################################
 
     # Helper function
     def get_table(self, table_id):

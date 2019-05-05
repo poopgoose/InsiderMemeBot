@@ -138,11 +138,11 @@ class InboxListener:
 
         Returns True if processing was successful, False otherwise.
         """
-        pass
+    
 
-        # 2. Distribute the points to the user who submitted the template
-        #user_key = {'user_id' : item['author_id']}
+        # 1. Distribute the points to the user who submitted the template
+        #user_key = {'user_id' : comment.user_id}
         #user_update_expr = "set {} = {} + :score".format(field_name, field_name)
         #user_expr_attrs = {":score" : decimal.Decimal(score)}
-        #self.bot.data_access.update_item(
+        #self.data_access.update_item(
         #    DataAccess.Tables.USERS, user_key, user_update_expr, user_expr_attrs)

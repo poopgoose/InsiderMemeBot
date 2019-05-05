@@ -139,6 +139,12 @@ class TemplateRequestFeature(Feature):
         """
         Processes a reply made to the bot in an active template request post
         """
+
+        # If the user doesn't already have an account, then create one
+        comment_redditor = comment.author
+        if comment_redditor is None:
+            return # The comment was deleted, so there's nothing for us to do
+
         comment_str = comment.body.strip()
         if not comment_str.lower().startswith("!template"):
             return # Nothing to process, since the reply wasn't a command
@@ -156,7 +162,6 @@ class TemplateRequestFeature(Feature):
             return
         else:
             # The command was formatted correctly!
-
 
             # Construct the commands for the mods to copy/paste into a response
             approve_cmd = "!approve"
@@ -185,11 +190,20 @@ class TemplateRequestFeature(Feature):
                 "Example:\n\n `" + reject_example + "`" 
 
             notification_msg = notification_msg.format(comment.permalink, comment.author.name)
-            for redditor in self.notified_mods:
-                redditor.message(notification_subj, notification_msg)
+            for mod_redditor in self.notified_mods:
+                mod_redditor.message(notification_subj, notification_msg)
 
-            self.bot.reply(comment, "Thanks for submitting the template! A moderator will be back shortly ")
-            #print("Success!") # TODO
+            # Create a new user for the comment author if they don't already have one
+            created_new_account = False
+            if not self.bot.data_access.is_user(comment_redditor):
+                self.bot.data_access.create_new_user(comment_redditor)
+                created_new_account = True
+
+            # Reply to the comment
+            msg = "Thanks for submitting the template! A moderator will be back shortly"
+            if created_new_account:
+                msg += "\n\n*New user registered for " + comment_redditor.name + "*"
+            self.bot.reply(comment, msg)
 
         
     def process_fulfilled_reply(self, comment):

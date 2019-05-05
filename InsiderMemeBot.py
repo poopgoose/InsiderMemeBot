@@ -216,19 +216,6 @@ class InsiderMemeBot:
             oldest_id = self.__processed_ids_by_time.pop(0) # Pop oldest comment at 0
             self.__processed_ids_by_hash.remove(oldest_id)
     
-
-    def is_user(self, author):
-        """
-        Returns true if the given author is a user in the DynamoDB database.
-        """
-        
-        # Query the table to get any user with a user_id matching the author's id
-        response = self.data_access.query(DataAccess.Tables.USERS, Key('user_id').eq(author.id))
-        num_matches = len(response['Items'])
-        
-        # If there is a match, then the author is already a user
-        return num_matches > 0
-
     def is_processed_recently(self, obj):
         """
         Returns whether or not the given submission or comment ID was processed by the Feature (Not the entire bot)
