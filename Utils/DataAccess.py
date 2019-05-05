@@ -161,7 +161,6 @@ class DataAccess:
         response = self.get_item(DataAccess.Tables.VARS, key)
 
         if response != None:
-            print(response)
             # If the variable doesn't exist, return None
             if not 'Item' in response:
                 print("No such variable: " + var_name)

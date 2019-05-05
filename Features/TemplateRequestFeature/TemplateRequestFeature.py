@@ -10,6 +10,7 @@ import math
 import os
 import re
 import Utils.Parsing
+import traceback
 
 class TemplateRequestFeature(Feature):
     """
@@ -124,12 +125,13 @@ class TemplateRequestFeature(Feature):
                 active_request_dict = request_dict
                 active_request_dict["imt_bot_comment_id"] = bot_comment.id
                 active_request_dict["imt_request_submission_id"] = request_submission.id
-                active_reuest_dict["imt_request_submission_title"] = request_submission.title
+                active_request_dict["imt_request_submission_title"] = request_submission.title
 
                 active_requests[submission_id] = active_request_dict
             except Exception as e:
                 print("!!!! Unable to process request!   Submission ID: " + str(submission_id))
                 print(e)
+                traceback.print_exc()
 
         # Update the active requests
         self.bot.data_access.set_variable("templaterequest_active_requests", active_requests)
