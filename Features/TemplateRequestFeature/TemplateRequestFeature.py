@@ -66,9 +66,6 @@ class TemplateRequestFeature(Feature):
             if len(pending_requests) > 0:
                 self.process_pending_requests(pending_requests)
 
-        # Check inbox to see if any mods have approved of any submitted requests
-        self.check_inbox()      
-
         self.prev_update_time = int(time.time())
 
     def process_comment(self, comment):
@@ -173,7 +170,7 @@ class TemplateRequestFeature(Feature):
             
 
             # Notify the mods
-            notification_subj = "Fulfilled template request <{}>".format(comment.id)
+            notification_subj = "Fulfilled template request <{},{}>".format(comment.id, comment.submission.id)
             notification_msg = "A [template request]({}) has been fulfilled by u/{}!\n\n " + \
                 "Please respond to this message with one of the commands below:\n\n\n\n" + \
                 "**To approve this template:**\n\n" + \
@@ -190,11 +187,8 @@ class TemplateRequestFeature(Feature):
             notification_msg = notification_msg.format(comment.permalink, comment.author.name)
             for redditor in self.notified_mods:
                 redditor.message(notification_subj, notification_msg)
-                #print("Sent message: " + str(msg))
-                #print(vars(msg))
 
-
-            #self.bot.reply(comment, "Thanks for submitting the template! A moderator will be back shortly ")
+            self.bot.reply(comment, "Thanks for submitting the template! A moderator will be back shortly ")
             #print("Success!") # TODO
 
         
@@ -234,15 +228,3 @@ class TemplateRequestFeature(Feature):
             # Return true if the comment is a reply to the bot, and the comment's submission is one of the requests in the given list
             submission_id = comment.submission.id
             return submission_id in request_submission_ids
-
-    def check_inbox(self):
-        """
-        Checks the inbox to see if any mods have approved of a template request fulfillment
-        """
-        inbox = self.bot.reddit.inbox
-
-        #for message in inbox.messages(limit=20):
-        #    print(vars(message))
-        #    print(message.subject)
-        #    print(message.body)
-        #    print("-" * 40)
