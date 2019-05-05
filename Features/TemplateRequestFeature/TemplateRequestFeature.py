@@ -160,22 +160,38 @@ class TemplateRequestFeature(Feature):
         else:
             # The command was formatted correctly!
 
+
+            # Construct the commands for the mods to copy/paste into a response
+            approve_cmd = "!approve"
+            approve_all_cmd = "!approve --all"
+            reject_cmd = "!reject"
+            reject_msg_cmd = "!reject --message <message>"
+
+            # An example for adding a reject message
+            reject_example = "!reject --message Thanks for the template! We appreciate the effort, but your " + \
+                "submission could not be accepted because the website it links to isn't one of our approved platforms."
+            
+
             # Notify the mods
             notification_subj = "Fulfilled template request <{}>".format(comment.id)
             notification_msg = "A [template request]({}) has been fulfilled by u/{}!\n\n " + \
-                "Please respond to this message with \n\n`!approve`\n\n to approve this template." + \
-                "Respond with \n\n`!approve user`\n\n to approve this template and all future template " + \
-                "requests fulfilled by this user.\n\n" + \
-                "To reject the template, respond to this message with \n\n`!reject <message>`\n\n, where `message` " + \
-                "is optional feedback to give to the user.\n\n" + \
-                "Example:\n\n`!reject The template you supplied is valid, but we don't approve of links to that website`\n\n" + \
-                "Everything below this line is used by the bot."
+                "Please respond to this message with one of the commands below:\n\n\n\n" + \
+                "**To approve this template:**\n\n" + \
+                "`" + approve_cmd + "`\n\n\n\n" + \
+                "**To approve this template, and all future templates for this user:**\n\n" + \
+                "`" + approve_all_cmd + "`\n\n\n\n" + \
+                "**To reject this template:**\n\n" + \
+                "`" + reject_cmd + "`\n\n\n\n" + \
+                "**To reject this template, and provide a message explaining why:**\n\n" + \
+                "`" + reject_msg_cmd + "`\n\n"  + \
+                "Anything after the `--message` flag is what will be sent to the author of the template.\n\n" + \
+                "Example:\n\n `" + reject_example + "`" 
 
             notification_msg = notification_msg.format(comment.permalink, comment.author.name)
             for redditor in self.notified_mods:
-                msg = redditor.message(notification_subj, notification_msg)
-                print("Sent message: " + str(msg))
-                print(vars(msg))
+                redditor.message(notification_subj, notification_msg)
+                #print("Sent message: " + str(msg))
+                #print(vars(msg))
 
 
             #self.bot.reply(comment, "Thanks for submitting the template! A moderator will be back shortly ")
@@ -197,7 +213,6 @@ class TemplateRequestFeature(Feature):
         for request_dict in active_requests.values():
             active_ids.append(request_dict["imt_request_submission_id"])
 
-        print("Active IDs: " + str(active_ids))
         return self.__is_request_reply(comment, active_ids)
 
     def is_fulfilled_request_reply(self, comment):
@@ -218,7 +233,6 @@ class TemplateRequestFeature(Feature):
         else:
             # Return true if the comment is a reply to the bot, and the comment's submission is one of the requests in the given list
             submission_id = comment.submission.id
-            print("Submission ID: " + str(submission_id))
             return submission_id in request_submission_ids
 
     def check_inbox(self):
