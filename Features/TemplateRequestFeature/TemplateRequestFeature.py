@@ -165,12 +165,12 @@ class TemplateRequestFeature(Feature):
 
             # Construct the commands for the mods to copy/paste into a response
             approve_cmd = "!approve"
-            approve_all_cmd = "!approve --all"
+            approve_all_cmd = "!approve -all"
             reject_cmd = "!reject"
-            reject_msg_cmd = "!reject --message <message>"
+            reject_msg_cmd = "!reject -message <message>"
 
             # An example for adding a reject message
-            reject_example = "!reject --message Thanks for the template! We appreciate the effort, but your " + \
+            reject_example = "!reject -message Thanks for the template! We appreciate the effort, but your " + \
                 "submission could not be accepted because the website it links to isn't one of our approved platforms."
             
 
@@ -186,7 +186,7 @@ class TemplateRequestFeature(Feature):
                 "`" + reject_cmd + "`\n\n\n\n" + \
                 "**To reject this template, and provide a message explaining why:**\n\n" + \
                 "`" + reject_msg_cmd + "`\n\n"  + \
-                "Anything after the `--message` flag is what will be sent to the author of the template.\n\n" + \
+                "Anything after the `-message` flag is what will be sent to the author of the template.\n\n" + \
                 "Example:\n\n `" + reject_example + "`" 
 
             notification_msg = notification_msg.format(comment.permalink, comment.author.name)

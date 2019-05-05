@@ -5,9 +5,11 @@ print(top_dir)
 sys.path.append(top_dir)
 
 
+from boto3.dynamodb.conditions import Key
 import decimal
 import praw
 import time
+from Features.TemplateRequestFeature import TemplateRequestFeature
 from Utils.DataAccess import DataAccess
 from Utils import RedditUtils
 import re
@@ -111,38 +113,71 @@ class InboxListener:
         command_text = message.body.strip()
 
         if command_text =="!approve":
-            self.__process_template_approval(request_submission_id, imt_submission_id, comment, False)
-        elif command_text == "!approve --all":
-            self.__process_template_approval(request_submission_id, imt_submission_id, comment, True)
-        elif command_text == "!reject" or command_text.startswith("!reject --message"):
+            self.__process_template_approval(request_submission_id, imt_submission_id, comment, message, False)
+        elif command_text == "!approve -all":
+            self.__process_template_approval(request_submission_id, imt_submission_id, comment, message, True)
+        elif command_text == "!reject" or command_text.startswith("!reject -message"):
             pass # TODO
         else:
             # Inform the moderator that the command was invalid.
             msg = "I could not understand your command. Accepted commands are:\n\n" + \
             "`!approve`: To approve this template\n\n" + \
-            "`!approve --all`: To approve this template, and all future templates submitted by this user\n\n" + \
+            "`!approve -all`: To approve this template, and all future templates submitted by this user\n\n" + \
             "`!reject`: To reject this template\n\n" + \
-            "`!reject --message <Message Text>`: To reject the template and add a message with an explanation"
+            "`!reject -message <Message Text>`: To reject the template and add a message with an explanation"
             message.reply(msg)
             return
 
 
-    def __process_template_approval(self, request_submission_id, imt_submission_id, comment, approve_all_future=False):
+    def __process_template_approval(self, request_submission_id, imt_submission_id, comment, message, approve_all_future=False):
         """
         Helper method for approving a template
 
         request_submission_id: The ID of the submission for which a template was requested
         imt_submission_id: The ID of the template request submission posted by InsiderMemeBot
         comment: The Comment where the user provided the requested template
+        message: The approval message from the moderator that the bot will reply to
         approve_all_future: Whether or not to automatically approve all future requests by this user
-
-        Returns True if processing was successful, False otherwise.
         """
-    
 
+        ##########################  Update Database ##########################
+    
         # 1. Distribute the points to the user who submitted the template
-        #user_key = {'user_id' : comment.user_id}
-        #user_update_expr = "set {} = {} + :score".format(field_name, field_name)
-        #user_expr_attrs = {":score" : decimal.Decimal(score)}
-        #self.data_access.update_item(
-        #    DataAccess.Tables.USERS, user_key, user_update_expr, user_expr_attrs)
+        total_points = TemplateRequestFeature.TemplateRequestFeature.REQUEST_REWARD # The total points to award
+        distribution_points = int(total_points / 2) # Distribute evenly between distribution and submission score
+        submission_points = total_points - distribution_points
+
+        user_data = self.data_access.query(DataAccess.Tables.USERS, Key('user_id').eq(comment.author.id))['Items'][0]
+        user_key = {'user_id' : user_data['user_id']}
+        user_update_expr = "set distribution_score = :dist, submission_score = :sub, total_score = :tot"
+        user_expr_attrs = {
+            ":dist" : decimal.Decimal(int(user_data['distribution_score']) + distribution_points),
+            ":sub"  : decimal.Decimal(int(user_data['submission_score']) + submission_points),
+            ":tot"  : decimal.Decimal(int(user_data['total_score']) + total_points)
+        }
+        self.data_access.update_item(
+            DataAccess.Tables.USERS, user_key, user_update_expr, user_expr_attrs)
+
+        if approve_all_future:
+            # Add the user to the approved users list
+            item_key = {'key' : 'templaterequest_approved_users'}
+            item_update_expr = "SET val = list_append(val, :i)"
+            item_expr_attrs = {':i' : [user_data['user_id']]}
+            self.data_access.update_item(DataAccess.Tables.VARS, item_key, item_update_expr, item_expr_attrs)
+
+        # Move the active template to fulfilled
+        # TODO
+
+        ######################### Reply to IMT comment and moderator message ####################
+        comment_reply = "Your template was approved! You have been awarded **{}** points".format(total_points) 
+        message_reply = "Thank you, the template has been approved."
+        if approve_all_future:
+            comment_reply += "\n\n*You are now approved for template request fulfillment, and will no longer " + \
+                "require moderator approval for provided templates.*"
+            message_reply += " u/" + user_data['username'] + " has been added to the list of approved template providers."
+        comment.reply(comment_reply)
+        message.reply(message_reply)
+
+
+
+        ############## Reply to the original comment requesting the IMT Template ################
