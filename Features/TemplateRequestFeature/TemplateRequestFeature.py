@@ -66,6 +66,11 @@ class TemplateRequestFeature(Feature):
             if len(pending_requests) > 0:
                 self.process_pending_requests(pending_requests)
 
+        # See if there are templates any that have been mod-approved and are waiting for processing.
+        mod_approved_requests = self.bot.data_access.get_variable("templaterequest_approved_requests")
+        if len(mod_approved_requests) > 0:
+            self.process_approved_requests(mod_approved_requests)
+
         self.prev_update_time = int(time.time())
 
     def process_comment(self, comment):
@@ -80,7 +85,6 @@ class TemplateRequestFeature(Feature):
         elif self.is_fulfilled_request_reply(comment):
             # The comment was a reply to a fulfilled request
             self.process_fulfilled_reply(comment)
-
 
     def process_pending_requests(self, pending_requests):
         """
@@ -135,12 +139,22 @@ class TemplateRequestFeature(Feature):
         self.bot.data_access.set_variable("templaterequest_pending_requests", {})
         self.prev_pending_requests_post_time = time.time()
 
+    def process_approved_requests(self, comment_request_pairs):
+        """
+        Processes a list of comments that have been marked by the mods as fulfilled template requests,
+        paired with the key for the active request that they fulfill
+
+        comment_request_pairs: A list of pairs, where the first item is the ID of the Comment in which
+        a template request is fulfilled, and the second item is the ID of the request in the 
+        templaterequest_active_requests dictionary in the AWS database.
+        """
+        print("Processing approved requests: " + str(comment_request_pairs))
+
     def process_active_reply(self, comment):
         """
         Processes a reply made to the bot in an active template request post
         """
 
-        # If the user doesn't already have an account, then create one
         comment_redditor = comment.author
         if comment_redditor is None:
             return # The comment was deleted, so there's nothing for us to do
@@ -162,36 +176,7 @@ class TemplateRequestFeature(Feature):
             return
         else:
             # The command was formatted correctly!
-
-            # Construct the commands for the mods to copy/paste into a response
-            approve_cmd = "!approve"
-            approve_all_cmd = "!approve -all"
-            reject_cmd = "!reject"
-            reject_msg_cmd = "!reject -message <message>"
-
-            # An example for adding a reject message
-            reject_example = "!reject -message Thanks for the template! We appreciate the effort, but your " + \
-                "submission could not be accepted because the website it links to isn't one of our approved platforms."
-            
-
-            # Notify the mods
-            notification_subj = "Fulfilled template request <{},{}>".format(comment.id, comment.submission.id)
-            notification_msg = "A [template request]({}) has been fulfilled by u/{}!\n\n " + \
-                "Please respond to this message with one of the commands below:\n\n\n\n" + \
-                "**To approve this template:**\n\n" + \
-                "`" + approve_cmd + "`\n\n\n\n" + \
-                "**To approve this template, and all future templates for this user:**\n\n" + \
-                "`" + approve_all_cmd + "`\n\n\n\n" + \
-                "**To reject this template:**\n\n" + \
-                "`" + reject_cmd + "`\n\n\n\n" + \
-                "**To reject this template, and provide a message explaining why:**\n\n" + \
-                "`" + reject_msg_cmd + "`\n\n"  + \
-                "Anything after the `-message` flag is what will be sent to the author of the template.\n\n" + \
-                "Example:\n\n `" + reject_example + "`" 
-
-            notification_msg = notification_msg.format(comment.permalink, comment.author.name)
-            for mod_redditor in self.notified_mods:
-                mod_redditor.message(notification_subj, notification_msg)
+            bot_response = "" # The bot's response to the user's comment
 
             # Create a new user for the comment author if they don't already have one
             created_new_account = False
@@ -199,11 +184,117 @@ class TemplateRequestFeature(Feature):
                 self.bot.data_access.create_new_user(comment_redditor)
                 created_new_account = True
 
-            # Reply to the comment
-            msg = "Thanks for submitting the template! A moderator will be back shortly"
+            # Check to see if the user is approved for fulfilling templates without mod review
+            approved_template_submitters = self.bot.data_access.get_variable("templaterequest_approved_users")
+            if not comment_redditor.id in approved_template_submitters:
+                # The user isn't approved to submit the templates directly, so submit it for mod review
+                self.submit_for_mod_review(comment)
+                bot_response = "Thanks for submitting the template! Since you are not yet an approved template submitter, a " + \
+                    "moderator will be back shortly to review the link you provided."
+            else:
+                # The user is approved to submit templates without needing mod review
+                self.submit_template(comment)
+                bot_response = "TODO"
+            self.submit_template(comment) # FOR DEBUGGING
+
+            # If a new account was created for the user, append the message in the footer
             if created_new_account:
-                msg += "\n\n*New user registered for " + comment_redditor.name + "*"
-            self.bot.reply(comment, msg)
+                bot_response  += "\n\n*New user registered for " + comment_redditor.name + "*"
+
+            self.bot.reply(comment, bot_response)
+
+
+    def submit_for_mod_review(self, comment):
+        """
+        Submits a fulfilled template request for moderator review
+        """
+
+        # Construct the commands for the mods to copy/paste into a response
+        approve_cmd = "!approve"
+        approve_all_cmd = "!approve -all"
+        reject_cmd = "!reject"
+        reject_msg_cmd = "!reject -message <message>"
+
+        # An example for adding a reject message
+        reject_example = "!reject -message Thanks for the template! We appreciate the effort, but your " + \
+            "submission could not be accepted because the website it links to isn't one of our approved platforms."
+
+        # Notify the mods
+        notification_subj = "Fulfilled template request <{},{}>".format(comment.id, comment.submission.id)
+        notification_msg = "A [template request]({}) has been fulfilled by u/{}!\n\n " + \
+            "Please respond to this message with one of the commands below:\n\n\n\n" + \
+            "**To approve this template:**\n\n" + \
+            "`" + approve_cmd + "`\n\n\n\n" + \
+            "**To approve this template, and all future templates for this user:**\n\n" + \
+            "`" + approve_all_cmd + "`\n\n\n\n" + \
+            "**To reject this template:**\n\n" + \
+            "`" + reject_cmd + "`\n\n\n\n" + \
+            "**To reject this template, and provide a message explaining why:**\n\n" + \
+            "`" + reject_msg_cmd + "`\n\n"  + \
+            "Anything after the `-message` flag is what will be sent to the author of the template.\n\n" + \
+            "Example:\n\n `" + reject_example + "`" 
+
+        notification_msg = notification_msg.format(comment.permalink, comment.author.name)
+        for mod_redditor in self.notified_mods:
+            mod_redditor.message(notification_subj, notification_msg)
+
+    def submit_template(self, comment, is_new_approved = False):
+        """
+        Submits a template to fulfill a templaterequest
+        comment: The comment in which the template has been provided
+        is_new_approved: Whether the user is a new approved template submitter
+        """
+
+        # 1. Get the active request information that corresponds to this comment
+        active_requests = self.bot.data_access.get_variable("templaterequest_active_requests")
+        request_info = None
+        for request_id in active_requests:
+            if active_requests[request_id]['imt_request_submission_id'] == comment.submission.id:
+                request_info = active_requests[request_id]
+                break
+
+
+
+        # 2. Distribute the points to the user who submitted the template
+        total_points = TemplateRequestFeature.REQUEST_REWARD # The total points to award
+        distribution_points = int(total_points / 2) # Distribute evenly between distribution and submission score
+        submission_points = total_points - distribution_points
+
+        user_data = self.bot.data_access.query(DataAccess.Tables.USERS, Key('user_id').eq(comment.author.id))['Items'][0]
+        user_key = {'user_id' : user_data['user_id']}
+        user_update_expr = "set distribution_score = :dist, submission_score = :sub, total_score = :tot"
+        user_expr_attrs = {
+            ":dist" : decimal.Decimal(int(user_data['distribution_score']) + distribution_points),
+            ":sub"  : decimal.Decimal(int(user_data['submission_score']) + submission_points),
+            ":tot"  : decimal.Decimal(int(user_data['total_score']) + total_points)
+        }
+        self.bot.data_access.update_item(
+            DataAccess.Tables.USERS, user_key, user_update_expr, user_expr_attrs)
+
+        # Move the active template to fulfilled
+        # TODO
+
+        ######################### Update Comments, Submissions, and Flairs ########################
+
+        ### Reply to IMT comment
+        comment_reply = "Your template was approved! You have been awarded **{}** points".format(total_points) 
+        if is_new_approved:
+            comment_reply += "\n\n*You are now approved for template request fulfillment, and will no longer " + \
+                "require moderator approval for provided templates.*"
+        comment.reply(comment_reply)
+
+        ### Reply to the original comment(s) requesting the IMT Template
+        for request_comment_id in request_info['requestor_comments']:
+            request_comment = self.bot.reddit.comment(id=request_comment_id)
+            request_comment_reply = "The template has been provided by u/" + user_data['username'] + "!\n\n" + \
+               "TODO: Add link to the template here"
+            request_comment.reply(request_comment_reply)
+
+        ### Update the bot's sticky post to say the template was fulfilled
+        # TODO
+
+        ### Flair the template request as fulfilled
+        # TODO
 
         
     def process_fulfilled_reply(self, comment):

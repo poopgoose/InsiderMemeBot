@@ -9,7 +9,6 @@ from boto3.dynamodb.conditions import Key
 import decimal
 import praw
 import time
-from Features.TemplateRequestFeature import TemplateRequestFeature
 from Utils.DataAccess import DataAccess
 from Utils import RedditUtils
 import re
@@ -95,13 +94,13 @@ class InboxListener:
 
         # Note: The dictionary is keyed by the Submission ID of the posts in which there has been a request, not on the
         # submission ID of the corresponding bot post on IMT for the request.
-        request_info_dict = None
+        request_info_key = None
         for submission_id in active_request_dict: 
             info_dict = active_request_dict[submission_id]
             if info_dict['imt_request_submission_id'] == imt_submission_id:
-                request_info_dict = info_dict
+                request_info_key  = submission_id
         
-        if request_info_dict == None:
+        if request_info_key == None:
             # Inform the moderator that the template request is no longer active.
             msg = "This template request is no longer active. This could mean that the submitted template has already been approved or rejected " + \
             "by another moderator, or that the template request has been fulfilled by a different user. " + \
@@ -113,9 +112,9 @@ class InboxListener:
         command_text = message.body.strip()
 
         if command_text =="!approve":
-            self.__process_template_approval(request_info_dict, comment, message, False)
+            self.__process_template_approval(request_info_key, comment, message, False)
         elif command_text == "!approve -all":
-            self.__process_template_approval(request_info_dict, imt_submission_id, comment, message, True)
+            self.__process_template_approval(request_info_key, comment, message, True)
         elif command_text == "!reject" or command_text.startswith("!reject -message"):
             pass # TODO
         else:
@@ -129,65 +128,37 @@ class InboxListener:
             return
 
 
-    def __process_template_approval(self, request_dict, comment, message, approve_all_future=False):
+    def __process_template_approval(self, request_key, comment, message, approve_all_future=False):
         """
         Helper method for approving a template
 
-        request_dict: The dictionary for the request from the templaterequest_active_requests map
+        request_key: The dictionary key for the request in the templaterequest_active_requests map
         comment: The Comment where the user provided the requested template
         message: The approval message from the moderator that the bot will reply to
         approve_all_future: Whether or not to automatically approve all future requests by this user
         """
 
-        ##########################  Update Database ##########################
-    
-        # 1. Distribute the points to the user who submitted the template
-        total_points = TemplateRequestFeature.TemplateRequestFeature.REQUEST_REWARD # The total points to award
-        distribution_points = int(total_points / 2) # Distribute evenly between distribution and submission score
-        submission_points = total_points - distribution_points
+        ####  Update Database ####
 
-        user_data = self.data_access.query(DataAccess.Tables.USERS, Key('user_id').eq(comment.author.id))['Items'][0]
-        user_key = {'user_id' : user_data['user_id']}
-        user_update_expr = "set distribution_score = :dist, submission_score = :sub, total_score = :tot"
-        user_expr_attrs = {
-            ":dist" : decimal.Decimal(int(user_data['distribution_score']) + distribution_points),
-            ":sub"  : decimal.Decimal(int(user_data['submission_score']) + submission_points),
-            ":tot"  : decimal.Decimal(int(user_data['total_score']) + total_points)
-        }
-        self.data_access.update_item(
-            DataAccess.Tables.USERS, user_key, user_update_expr, user_expr_attrs)
+        # Add tuple of the comment ID and the key in the active_requests map to the approved_requests list
+        item_pair = [comment.id, request_key]
+        item_key = {'key' : 'templaterequest_approved_requests'}
+        item_update_expr = "SET val = list_append(val, :i)"
+        item_expr_attrs = {':i' : [item_pair]}
+        self.data_access.update_item(DataAccess.Tables.VARS, item_key, item_update_expr, item_expr_attrs)
 
         if approve_all_future:
             # Add the user to the approved users list
             item_key = {'key' : 'templaterequest_approved_users'}
             item_update_expr = "SET val = list_append(val, :i)"
-            item_expr_attrs = {':i' : [user_data['user_id']]}
+            item_expr_attrs = {':i' : [comment.author.id]}
             self.data_access.update_item(DataAccess.Tables.VARS, item_key, item_update_expr, item_expr_attrs)
 
-        # Move the active template to fulfilled
-        # TODO
-
-        ######################### Update Comments, Submissions, and Flairs ########################
-
-        ### Reply to IMT comment and moderator message
-        comment_reply = "Your template was approved! You have been awarded **{}** points".format(total_points) 
-        message_reply = "Thank you, the template has been approved."
+        #### Reply to moderator message ####
+        message_reply = "Thank you, the template has been approved and will be processed shortly."
         if approve_all_future:
-            comment_reply += "\n\n*You are now approved for template request fulfillment, and will no longer " + \
-                "require moderator approval for provided templates.*"
-            message_reply += " u/" + user_data['username'] + " has been added to the list of approved template providers."
-        comment.reply(comment_reply)
+            message_reply += " u/" + comment.author.name + " has been added to the list of approved template providers."
+
         message.reply(message_reply)
 
-        ### Reply to the original comment(s) requesting the IMT Template
-        for request_comment_id in request_dict['requestor_comments']:
-            request_comment = self.reddit.comment(id=request_comment_id)
-            request_comment_reply = "The template has been provided by u/" + user_data['username'] + "!\n\n" + \
-               "TODO: Add link to the template here"
-            request_comment.reply(request_comment_reply)
 
-        ### Update the bot's sticky post to say the template was fulfilled
-        # TODO
-
-        ### Flair the template request as fulfilled
-        # TODO
