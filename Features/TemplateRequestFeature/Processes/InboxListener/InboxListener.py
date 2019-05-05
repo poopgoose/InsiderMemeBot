@@ -95,13 +95,13 @@ class InboxListener:
 
         # Note: The dictionary is keyed by the Submission ID of the posts in which there has been a request, not on the
         # submission ID of the corresponding bot post on IMT for the request.
-        request_submission_id = None
+        request_info_dict = None
         for submission_id in active_request_dict: 
-            request_dict = active_request_dict[submission_id]
-            if request_dict['imt_request_submission_id'] == imt_submission_id:
-                request_submission_id = submission_id 
+            info_dict = active_request_dict[submission_id]
+            if info_dict['imt_request_submission_id'] == imt_submission_id:
+                request_info_dict = info_dict
         
-        if request_submission_id == None:
+        if request_info_dict == None:
             # Inform the moderator that the template request is no longer active.
             msg = "This template request is no longer active. This could mean that the submitted template has already been approved or rejected " + \
             "by another moderator, or that the template request has been fulfilled by a different user. " + \
@@ -113,9 +113,9 @@ class InboxListener:
         command_text = message.body.strip()
 
         if command_text =="!approve":
-            self.__process_template_approval(request_submission_id, imt_submission_id, comment, message, False)
+            self.__process_template_approval(request_info_dict, comment, message, False)
         elif command_text == "!approve -all":
-            self.__process_template_approval(request_submission_id, imt_submission_id, comment, message, True)
+            self.__process_template_approval(request_info_dict, imt_submission_id, comment, message, True)
         elif command_text == "!reject" or command_text.startswith("!reject -message"):
             pass # TODO
         else:
@@ -129,12 +129,11 @@ class InboxListener:
             return
 
 
-    def __process_template_approval(self, request_submission_id, imt_submission_id, comment, message, approve_all_future=False):
+    def __process_template_approval(self, request_dict, comment, message, approve_all_future=False):
         """
         Helper method for approving a template
 
-        request_submission_id: The ID of the submission for which a template was requested
-        imt_submission_id: The ID of the template request submission posted by InsiderMemeBot
+        request_dict: The dictionary for the request from the templaterequest_active_requests map
         comment: The Comment where the user provided the requested template
         message: The approval message from the moderator that the bot will reply to
         approve_all_future: Whether or not to automatically approve all future requests by this user
@@ -168,7 +167,9 @@ class InboxListener:
         # Move the active template to fulfilled
         # TODO
 
-        ######################### Reply to IMT comment and moderator message ####################
+        ######################### Update Comments, Submissions, and Flairs ########################
+
+        ### Reply to IMT comment and moderator message
         comment_reply = "Your template was approved! You have been awarded **{}** points".format(total_points) 
         message_reply = "Thank you, the template has been approved."
         if approve_all_future:
@@ -178,6 +179,15 @@ class InboxListener:
         comment.reply(comment_reply)
         message.reply(message_reply)
 
+        ### Reply to the original comment(s) requesting the IMT Template
+        for request_comment_id in request_dict['requestor_comments']:
+            request_comment = self.reddit.comment(id=request_comment_id)
+            request_comment_reply = "The template has been provided by u/" + user_data['username'] + "!\n\n" + \
+               "TODO: Add link to the template here"
+            request_comment.reply(request_comment_reply)
 
+        ### Update the bot's sticky post to say the template was fulfilled
+        # TODO
 
-        ############## Reply to the original comment requesting the IMT Template ################
+        ### Flair the template request as fulfilled
+        # TODO

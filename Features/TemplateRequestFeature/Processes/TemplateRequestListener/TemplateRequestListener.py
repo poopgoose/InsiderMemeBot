@@ -130,7 +130,6 @@ class TemplateRequestListener:
 
             self.data_access.set_variable("templaterequest_pending_requests", pending_requests)
 
-
             print("=" * 40)
             print("TemplateRequestListener: Received request\n")
             print("Permalink: " + str(request_comment.permalink))
@@ -140,7 +139,7 @@ class TemplateRequestListener:
             # Respond to the comment
             request_comment.reply(
                 "Your template request has been received by r/InsiderMemeTrading!\n\n" + \
-                "I will update this comment and send a message to your inbox when the request is fulfilled."
+                "I will reply to this comment again when the template has been provided."
             )
 
 
