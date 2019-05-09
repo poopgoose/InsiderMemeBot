@@ -213,16 +213,16 @@ class TemplateRequestFeature(Feature):
                 self.submit_for_mod_review(comment)
                 bot_response = "Thanks for submitting the template! Since you are not yet an approved template submitter, a " + \
                     "moderator will be back shortly to review the link you provided."
+
+                # If a new account was created for the user, append the message in the footer
+                if created_new_account:
+                    bot_response  += "\n\n*New user registered for " + comment_redditor.name + "*"
+                
+                self.bot.reply(comment, bot_response)
+
             else:
                 # The user is approved to submit templates without needing mod review
                 self.submit_template(comment)
-                bot_response = "TODO"
-
-            # If a new account was created for the user, append the message in the footer
-            if created_new_account:
-                bot_response  += "\n\n*New user registered for " + comment_redditor.name + "*"
-
-            self.bot.reply(comment, bot_response)
 
 
     def submit_for_mod_review(self, comment):
@@ -267,6 +267,23 @@ class TemplateRequestFeature(Feature):
         is_new_approved_user: Whether the user is a new approved template submitter
         """
 
+
+        ####################### Validation ###########################
+        # First validate the provided template to make sure it's all set.
+        urls = Utils.Parsing.get_urls(comment.body)
+        if len(urls) == 0:
+            self.bot.reply(comment, "Thanks for the template, but I couldn't find any URLs in your comment. Please try again!")
+            return
+        elif len(urls) > 1:
+            self.bot.reply(comment, "Thanks for the template, but I detected too many URLs in your comment. " + \
+                                     "Please try again with a single URL.")
+            return
+
+        # At this point, we know there is exactly one URL
+        template_url = urls[0]
+
+
+        ######################### Template Submission ###########################
         # 1. Get the active request information that corresponds to this comment
         active_requests = self.bot.data_access.get_variable("templaterequest_active_requests")
         request_info = None
@@ -298,7 +315,7 @@ class TemplateRequestFeature(Feature):
             'id' : comment.submission.id,
             'request_permalink' :  request_info["permalink"],
             'imt_permalink' : comment.submission.permalink,
-            'template_url' : "TODO",
+            'template_url' : template_url,
             'fulfilled_by' : comment.author.id
         }
         self.bot.data_access.put_item(DataAccess.Tables.TEMPLATE_REQUESTS, fulfilled_request)
@@ -308,17 +325,23 @@ class TemplateRequestFeature(Feature):
         ######################### Update Comments, Submissions, and Flairs ########################
 
         ### Reply to IMT comment
-        comment_reply = "Your template was approved! You have been awarded **{}** points".format(total_points) 
-        if is_new_approved_user:
-            comment_reply += "\n\n*You are now approved for template request fulfillment, and will no longer " + \
-                "require moderator approval for provided templates.*"
-        comment.reply(comment_reply)
+        if is_mod_approved:
+            # The template was approved by a moderator
+            comment_reply = "Your template was approved! You have been awarded **{}** points".format(total_points) 
+            if is_new_approved_user:
+                comment_reply += "\n\n*You are now approved for template request fulfillment, and will no longer " + \
+                    "require moderator approval for provided templates.*"
+        else:
+            # The user is already an approved template submitter, not requiring moderator review
+            comment_reply = "Thank you for the template! You have been awarded **{}** points.".format(total_points)
+        self.bot.reply(comment, comment_reply)
 
         ### Reply to the original comment(s) requesting the IMT Template
         for request_comment_id in request_info['requestor_comments']:
             request_comment = self.bot.reddit.comment(id=request_comment_id)
             request_comment_reply = "The template has been provided by u/" + user_data['username'] + "!\n\n" + \
-               "TODO: Add link to the template here"
+               "[Template](" + template_url + ")"
+               
             request_comment.reply(request_comment_reply)
 
         ### Update the bot's sticky post to say the template was fulfilled
