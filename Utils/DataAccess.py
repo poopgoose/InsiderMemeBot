@@ -23,10 +23,12 @@ class DataAccess:
             self.user_table = self.dynamodb.Table('Users')
             self.tracking_table = self.dynamodb.Table('Tracking')
             self.vars_table = self.dynamodb.Table('Vars')
+            self.template_request_table = self.dynamodb.Table('TemplateRequests')
         else:
             self.user_table = self.dynamodb.Table('Users-dev')
             self.tracking_table = self.dynamodb.Table('Tracking-dev')
             self.vars_table = self.dynamodb.Table('Vars-dev')
+            self.template_request_table = self.dynamodb.Table('TemplateRequests-dev')
 
     ###########################################################################
     ###                         CORE FUNCTIONS                              ###
@@ -213,9 +215,9 @@ class DataAccess:
             return False
 
 
-    def is_user(self, author):
+    def is_user(self, redditor):
         """
-        Returns true if the given author is a user in the DynamoDB database.
+        Returns true if the given redditor is a user in the DynamoDB database.
         """
         
         # Query the table to get any user with a user_id matching the author's id
@@ -237,6 +239,8 @@ class DataAccess:
             return self.tracking_table
         elif table_id == DataAccess.Tables.VARS:
             return self.vars_table
+        elif table_id == DataAccess.Tables.TEMPLATE_REQUESTS:
+            return self.template_request_table
         else:
             raise RuntimeError("Bad Table Id: " + str(table_id))
 
@@ -252,6 +256,8 @@ class DataAccess:
             return self.tracking_table.name
         elif id == DataAccess.Tables.VARS:
             return self.vars_table.name
+        elif id == DataAccess.Tables.TEMPLATE_REQUESTS:
+            return self.template_request_table.name
         else:
             print("Invalid ID for idToString: " + str(id))
             return "unknown"
@@ -263,3 +269,4 @@ class DataAccess:
         USERS = 0
         TRACKING = 1
         VARS = 2
+        TEMPLATE_REQUESTS = 3

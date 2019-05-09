@@ -134,7 +134,7 @@ class TemplateRequestFeature(Feature):
                 print(e)
                 traceback.print_exc()
 
-        # Update the active requests
+        # Update the active requests and pending requests
         self.bot.data_access.set_variable("templaterequest_active_requests", active_requests)
         self.bot.data_access.set_variable("templaterequest_pending_requests", {})
         self.prev_pending_requests_post_time = time.time()
@@ -148,7 +148,28 @@ class TemplateRequestFeature(Feature):
         a template request is fulfilled, and the second item is the ID of the request in the 
         templaterequest_active_requests dictionary in the AWS database.
         """
+
+        # TODO - Cleanup comment_request_pairs. The second item is no longer required
+        
         print("Processing approved requests: " + str(comment_request_pairs))
+        for pair in comment_request_pairs:
+
+            try:
+                comment_id = pair[0]
+                comment = self.bot.reddit.comment(id=comment_id)
+
+                if comment.author is not None:
+                    # If the user is in the 'templaterequest_approved_users' list, then the 
+                    # moderator approved them as new approved users.
+                    approved_users = self.bot.data_access.get_variable('templaterequest_approved_users')
+                    is_new_approved = comment.author.id in approved_users
+                    self.submit_template(comment, is_mod_approved=True, is_new_approved_user=is_new_approved)
+            except Exception as e:
+                print("Error while processing approved request " + comment_id + ": " + str(e))
+                traceback.print_exc()
+
+        # Clear the approved requests after processing
+        self.bot.data_access.set_variable("templaterequest_approved_requests", [])
 
     def process_active_reply(self, comment):
         """
@@ -195,7 +216,6 @@ class TemplateRequestFeature(Feature):
                 # The user is approved to submit templates without needing mod review
                 self.submit_template(comment)
                 bot_response = "TODO"
-            self.submit_template(comment) # FOR DEBUGGING
 
             # If a new account was created for the user, append the message in the footer
             if created_new_account:
@@ -238,22 +258,23 @@ class TemplateRequestFeature(Feature):
         for mod_redditor in self.notified_mods:
             mod_redditor.message(notification_subj, notification_msg)
 
-    def submit_template(self, comment, is_new_approved = False):
+    def submit_template(self, comment, is_mod_approved = False, is_new_approved_user = False):
         """
         Submits a template to fulfill a templaterequest
         comment: The comment in which the template has been provided
-        is_new_approved: Whether the user is a new approved template submitter
+        is_mod_approved: Whether this template had been approved by a moderator for an unapproved template submitter
+        is_new_approved_user: Whether the user is a new approved template submitter
         """
 
         # 1. Get the active request information that corresponds to this comment
         active_requests = self.bot.data_access.get_variable("templaterequest_active_requests")
         request_info = None
+        active_request_id = ""
         for request_id in active_requests:
             if active_requests[request_id]['imt_request_submission_id'] == comment.submission.id:
+                active_request_id = request_id
                 request_info = active_requests[request_id]
                 break
-
-
 
         # 2. Distribute the points to the user who submitted the template
         total_points = TemplateRequestFeature.REQUEST_REWARD # The total points to award
@@ -271,14 +292,23 @@ class TemplateRequestFeature(Feature):
         self.bot.data_access.update_item(
             DataAccess.Tables.USERS, user_key, user_update_expr, user_expr_attrs)
 
-        # Move the active template to fulfilled
-        # TODO
+        # 3. Remove from the active templates, and add to the Templates table
+        fulfilled_request = {
+            'id' : comment.submission.id,
+            'request_permalink' :  request_info["permalink"],
+            'imt_permalink' : comment.submission.permalink,
+            'template_url' : "TODO",
+            'fulfilled_by' : comment.author.id
+        }
+        self.bot.data_access.put_item(DataAccess.Tables.TEMPLATE_REQUESTS, fulfilled_request)
+        del active_requests[active_request_id]
+        self.bot.data_access.set_variable("templaterequest_active_requests", active_requests)
 
         ######################### Update Comments, Submissions, and Flairs ########################
 
         ### Reply to IMT comment
         comment_reply = "Your template was approved! You have been awarded **{}** points".format(total_points) 
-        if is_new_approved:
+        if is_new_approved_user:
             comment_reply += "\n\n*You are now approved for template request fulfillment, and will no longer " + \
                 "require moderator approval for provided templates.*"
         comment.reply(comment_reply)
