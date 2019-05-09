@@ -221,7 +221,7 @@ class DataAccess:
         """
         
         # Query the table to get any user with a user_id matching the author's id
-        response = self.query(DataAccess.Tables.USERS, Key('user_id').eq(author.id))
+        response = self.query(DataAccess.Tables.USERS, Key('user_id').eq(redditor.id))
         num_matches = len(response['Items'])
         
         # If there is a match, then the author is already a user

@@ -37,8 +37,9 @@ class TemplateRequestFeature(Feature):
         self.prev_update_time = 0 # The time that the bot previously ran its update loop
         self.prev_pending_requests_post_time = 0 # The time that the bot previously posted pending template requests
 
-        # Get the flair ID
+        # Get the flair IDs
         self.flair_id = self.bot.data_access.get_variable("templaterequest_flair_id")
+        self.fulfilled_flair_id = self.bot.data_access.get_variable("templaterequest_fulfilled_flair_id")
 
         # Get the mods to notify for when a template request is made or fulfilled
         notified_names = self.bot.data_access.get_variable("templaterequest_notified_mods")
@@ -109,7 +110,7 @@ class TemplateRequestFeature(Feature):
                     self.bot.subreddit,
                     title = "New template request from r/" + str(request_dict["subreddit_name"]) + "!")
 
-                request_submission.mod.flair(text='Template Request')
+                request_submission.flair.select(self.flair_id)
 
                 # Add the sticky comment to the submission
                 reply_msg = "A template has been requested for this meme!\n\n" + \
@@ -321,10 +322,11 @@ class TemplateRequestFeature(Feature):
             request_comment.reply(request_comment_reply)
 
         ### Update the bot's sticky post to say the template was fulfilled
+        imt_submission = comment.submission
         # TODO
 
         ### Flair the template request as fulfilled
-        # TODO
+        imt_submission.flair.select(self.fulfilled_flair_id)
 
         
     def process_fulfilled_reply(self, comment):
