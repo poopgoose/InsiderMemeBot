@@ -1,7 +1,6 @@
 # Set up sys.path so it can find the utilities
 import os, sys
 top_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..'))
-print(top_dir)
 sys.path.append(top_dir)
 
 

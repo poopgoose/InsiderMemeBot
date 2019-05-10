@@ -398,7 +398,6 @@ class TemplateRequestFeature(Feature):
         items = self.bot.data_access.query(DataAccess.Tables.TEMPLATE_REQUESTS,
             key_condition_expr = Key('id').eq(comment.submission.id))['Items']
 
-        print("Items: " + str(items))
         return len(items) > 0 # If there is an entry in the TEMPLATE_REQUESTS table for this ID, then it's been fulfilled already
 
 

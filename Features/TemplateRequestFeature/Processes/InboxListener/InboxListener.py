@@ -115,8 +115,14 @@ class InboxListener:
             self.__process_template_approval(request_info_key, comment, message, False)
         elif command_text == "!approve -all":
             self.__process_template_approval(request_info_key, comment, message, True)
-        elif command_text == "!reject" or command_text.startswith("!reject -message"):
-            pass # TODO
+        elif command_text.startswith("!reject"):
+            # See if there is a message provided
+            custom_reply = ""
+            custom_reply_regex = r"!reject\s+-message\s+(.+)"
+            match = re.match(custom_reply_regex, command_text)
+            if match != None:
+                custom_reply = match.groups()[0]
+            self.__process_template_rejection(request_info_key, comment, message, custom_reply)
         else:
             # Inform the moderator that the command was invalid.
             msg = "I could not understand your command. Accepted commands are:\n\n" + \
@@ -162,3 +168,17 @@ class InboxListener:
         message.reply(message_reply)
 
 
+
+    def __process_template_rejection(self, request_key, comment, message, custom_reply=""):
+        """
+        Helper method for rejecting a template
+
+        request_key: The dictionary key for the request in the templaterequest_active_requests map
+        comment: The Comment where the user provided the requested template
+        message: The approval message from the moderator that the bot will reply to
+        custom_reply: A custom reply from the moderator explaining why an example was rejected
+        """
+        pass
+        #if custom_reply == "":            
+        #    # Respond to the moderator that the template will be rejected
+        #    message.reply(message_reply)
