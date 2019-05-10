@@ -98,19 +98,15 @@ class TemplateRequestListener:
             pending_requests[submission_id] = request_dict
 
             self.data_access.set_variable("templaterequest_pending_requests", pending_requests)
-
-            # Respond to the comment
-            request_comment.reply(
-                "There is already an open request for this template. I will notify you when it is fullfiled!"
-            )
             
         # Case 2: There is already an active request for the template
         elif submission_id in active_requests:
-
+            imt_permalink = active_requests[submission_id]["imt_request_permalink"]
             # Respond to the comment
             request_comment.reply(
-                "There is already an open request for this template. I will notify you when it is fullfiled!"
-            )
+                "There is already an open request for this template. I will notify you when it is fullfiled!" + \
+                "You can track the request for this template [here](" + imt_permalink + ")")
+            
         # Case 3: There is a completed request for the requested template
         elif submission_id in fulfilled_requests:
             pass # TODO
@@ -135,12 +131,6 @@ class TemplateRequestListener:
             print("Permalink: " + str(request_comment.permalink))
             print("Author: " + str(request_comment.author))
             print("=" * 40)
-
-            # Respond to the comment
-            request_comment.reply(
-                "Your template request has been received by r/InsiderMemeTrading!\n\n" + \
-                "I will reply to this comment again when the template has been provided."
-            )
 
 
     def __start__(self):

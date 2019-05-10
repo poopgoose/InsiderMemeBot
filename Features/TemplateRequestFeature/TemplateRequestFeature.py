@@ -128,8 +128,18 @@ class TemplateRequestFeature(Feature):
                 active_request_dict["imt_bot_comment_id"] = bot_comment.id
                 active_request_dict["imt_request_submission_id"] = request_submission.id
                 active_request_dict["imt_request_submission_title"] = request_submission.title
+                active_request_dict["imt_request_permalink"] = request_submission.permalink
 
                 active_requests[submission_id] = active_request_dict
+
+                # Respond to the request comment(s)
+                for request_comment_id in request_dict['requestor_comments']:
+                    request_comment = self.bot.reddit.comment(id=request_comment_id)
+                    request_comment.reply(
+                    "Your template request has been received by r/InsiderMemeTrading!\n\n" + \
+                    "I will reply to this comment again when the template has been provided." + \
+                    "You can track the request [here](" + bot_comment.permalink + ")")
+
             except Exception as e:
                 print("!!!! Unable to process request!   Submission ID: " + str(submission_id))
                 print(e)
@@ -346,7 +356,7 @@ class TemplateRequestFeature(Feature):
 
         ### Update the bot's sticky post to say the template was fulfilled
         imt_submission = comment.submission
-        # TODO
+
 
         ### Flair the template request as fulfilled
         imt_submission.flair.select(self.fulfilled_flair_id)
