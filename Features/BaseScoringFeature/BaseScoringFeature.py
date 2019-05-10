@@ -198,6 +198,12 @@ class BaseScoringFeature(Feature):
         Processes the "!example" command
         """
         print("Processing example: " + str(comment.body))
+
+        # If this submission is made by the bot itself, then it isn't valid for examples.
+        # (Scoreboards, template requests, etc)
+        if comment.submission.author != None and comment.submission.author.id == self.bot.my_id:
+            self.bot.reply(comment, "Sorry, but examples are not valid for this post.")
+            return
   
         # Check to make sure the example is valid. If not, respond with the reason why it's invalid.
         example_submission, validation_msg = self.__validate_example(comment)

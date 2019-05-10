@@ -78,7 +78,6 @@ class TemplateRequestFeature(Feature):
         """
         Processes comments
         """
-
         if self.is_active_request_reply(comment):
             # The comment was a reply to an active request
             self.process_active_reply(comment)
@@ -370,7 +369,10 @@ class TemplateRequestFeature(Feature):
         """
         Processes a reply made to the bot in a template request post that has already been filled
         """
-        pass # TODO
+        if not comment.body.lower().startswith("!template"):
+            return # Nothing to process, since the reply wasn't a command
+
+        self.bot.reply(comment, "This template request has already been fulfilled.")
 
     def is_active_request_reply(self, comment):
         """
@@ -387,8 +389,18 @@ class TemplateRequestFeature(Feature):
         """
         Returns true if the comment is a reply to the bot's sticky post on a fulfilled request
         """
-        fulfilled_ids = [] # TODO
-        return self.__is_request_reply(comment, fulfilled_ids)
+        if comment.parent().author.id == None or comment.parent().author.id != self.bot.reddit.user.me().id:
+            return False
+
+        # This is a reply to the bot's comment
+
+        # See if the template was already fulfilled
+        items = self.bot.data_access.query(DataAccess.Tables.TEMPLATE_REQUESTS,
+            key_condition_expr = Key('id').eq(comment.submission.id))['Items']
+
+        print("Items: " + str(items))
+        return len(items) > 0 # If there is an entry in the TEMPLATE_REQUESTS table for this ID, then it's been fulfilled already
+
 
     def __is_request_reply(self, comment, request_submission_ids):
         """
