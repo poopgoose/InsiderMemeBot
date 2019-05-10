@@ -355,10 +355,14 @@ class TemplateRequestFeature(Feature):
             request_comment.reply(request_comment_reply)
 
         ### Update the bot's sticky post to say the template was fulfilled
-        imt_submission = comment.submission
-
+        bot_comment = self.bot.reddit.comment(id=request_info["imt_bot_comment_id"])
+        new_text = "**This template request has been fulfilled!**\n\n" + \
+            "[Link to Template](" + template_url + ")\n\n" + \
+            "Thanks, u/" + comment.author.name + "!"
+        bot_comment.edit(new_text)
 
         ### Flair the template request as fulfilled
+        imt_submission = comment.submission
         imt_submission.flair.select(self.fulfilled_flair_id)
 
         
