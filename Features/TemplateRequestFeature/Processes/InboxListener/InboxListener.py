@@ -122,7 +122,7 @@ class InboxListener:
             match = re.match(custom_reply_regex, command_text)
             if match != None:
                 custom_reply = match.groups()[0]
-            self.__process_template_rejection(request_info_key, comment, message, custom_reply)
+            self.__process_template_rejection(comment, message, custom_reply)
         else:
             # Inform the moderator that the command was invalid.
             msg = "I could not understand your command. Accepted commands are:\n\n" + \
@@ -169,16 +169,22 @@ class InboxListener:
 
 
 
-    def __process_template_rejection(self, request_key, comment, message, custom_reply=""):
+    def __process_template_rejection(self, comment, message, custom_reply=""):
         """
         Helper method for rejecting a template
 
-        request_key: The dictionary key for the request in the templaterequest_active_requests map
         comment: The Comment where the user provided the requested template
         message: The approval message from the moderator that the bot will reply to
         custom_reply: A custom reply from the moderator explaining why an example was rejected
         """
-        pass
-        #if custom_reply == "":            
-        #    # Respond to the moderator that the template will be rejected
-        #    message.reply(message_reply)
+
+        # Add tuple of the comment ID, the key in the active_requests map, and the custom message
+        # to the rejected_requests list
+        item_list = [comment.id, custom_reply]
+        item_key = {'key' : 'templaterequest_rejected_requests'}
+        item_update_expr = "SET val = list_append(val, :i)"
+        item_expr_attrs = {':i' : [item_list]}
+        self.data_access.update_item(DataAccess.Tables.VARS, item_key, item_update_expr, item_expr_attrs)
+
+        ### Reply to the moderator message ###
+        message.reply("Thank you, the template has been rejected and will be processed shortly.")

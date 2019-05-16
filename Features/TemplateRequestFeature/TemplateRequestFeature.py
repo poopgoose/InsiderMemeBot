@@ -67,10 +67,15 @@ class TemplateRequestFeature(Feature):
             if len(pending_requests) > 0:
                 self.process_pending_requests(pending_requests)
 
-        # See if there are templates any that have been mod-approved and are waiting for processing.
+        # See if there are any templates that have been mod-approved and are waiting for processing.
         mod_approved_requests = self.bot.data_access.get_variable("templaterequest_approved_requests")
         if len(mod_approved_requests) > 0:
             self.process_approved_requests(mod_approved_requests)
+
+        # See if there are any templates that have been mod-rejected and are waiting for processing.
+        mod_rejected_requests = self.bot.data_access.get_variable("templaterequest_rejected_requests")
+        if len(mod_rejected_requests) > 0:
+            self.process_rejected_requests(mod_rejected_requests)
 
         self.prev_update_time = int(time.time())
 
@@ -180,6 +185,45 @@ class TemplateRequestFeature(Feature):
 
         # Clear the approved requests after processing
         self.bot.data_access.set_variable("templaterequest_approved_requests", [])
+
+    def process_rejected_requests(self, comment_request_lists):
+        """
+        Processes a list of comments that have been marked by the mods as fulfilled templates that have been
+        rejected.
+
+        comment_request_lists: A list of pairs, where each pair is defined as:
+            - The first item is the ID of the Comment in which the template was supplied by the user
+            - The second item is any custom message that the moderator provided 
+        """
+
+        # TODO - Cleanup comment_request_pairs. The second item is no longer required
+        
+        print("Processing rejected requests: " + str(comment_request_lists))
+        comment_id = ""
+        rejection_message = ""
+        for item in comment_request_lists:
+            try:
+                comment_id = item[0]
+                rejection_message = item[1]
+                comment = self.bot.reddit.comment(id=comment_id)
+
+                if comment.author is not None:
+                    # The post hasn't been deleted
+                    if len(rejection_message) == 0:
+                        comment_reply = "I'm sorry, but your template has been rejected by a moderator. " + \
+                            "Please message the mods directly if you think this was a mistake."
+                    else:
+                        comment_reply = "I'm sorry, but your template has been rejected by a moderator. " + \
+                        "The following explanation was provided by the mods:\n\n" + rejection_message
+
+                    self.bot.reply(comment, comment_reply)
+
+            except Exception as e:
+                print("Error while processing rejected request " + comment_id + ": " + str(e))
+                traceback.print_exc()
+
+        # Clear the rejected requests after processing
+        self.bot.data_access.set_variable("templaterequest_rejected_requests", [])
 
     def process_active_reply(self, comment):
         """
