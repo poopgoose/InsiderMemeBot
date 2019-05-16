@@ -21,7 +21,7 @@ import decimal
 
 class InsiderMemeBot:
 
-    VERSION = "2.2" # The version of InsiderMemeBot
+    VERSION = "2.3" # The version of InsiderMemeBot
 
     ID_STORE_LIMIT = 1000 # The number of recent comment/submission IDs stored by the feature
 
