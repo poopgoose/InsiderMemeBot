@@ -1,1 +1,1 @@
-worker: python Processes/Tracker/run_tracker.py & python Processes/TemplateRequestListener/run_request_listener.py & python main.py
+worker: ./run_bot.sh
