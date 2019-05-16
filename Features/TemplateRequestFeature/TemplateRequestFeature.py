@@ -24,10 +24,10 @@ class TemplateRequestFeature(Feature):
     # The minimum number of seconds permitted between posting request notifications.
     # If multiple requests are received within the minimum interval, they are bundled
     # together and posted together as a single submission
-    PENDING_REQUESTS_POST_INTERVAL = 120
+    PENDING_REQUESTS_POST_INTERVAL = 1
 
     # How often to update
-    UPDATE_INTERVAL =  1 * 5 # Update every 60 seconds
+    UPDATE_INTERVAL =  60 # Update every 60 seconds
 
     REQUEST_REWARD = 500 # The amount of points to award for fulfilling a request
 
@@ -56,6 +56,12 @@ class TemplateRequestFeature(Feature):
         if cur_time < self.prev_update_time + TemplateRequestFeature.UPDATE_INTERVAL:
             return # Not time to update yet
 
+        # Get the mods to notify for when a template request is made or fulfilled. May have changed if mods opt in/out
+        notified_names = self.bot.data_access.get_variable("templaterequest_notified_mods")
+        self.notified_mods = []
+        for name in notified_names:
+            self.notified_mods.append(self.bot.reddit.redditor(name))
+
         # Update the pending requests.
         # A pending request means it has been registered in the AWS Database,
         # but InsiderMemeBot has yet to create a comment with the request information.
@@ -78,6 +84,7 @@ class TemplateRequestFeature(Feature):
             self.process_rejected_requests(mod_rejected_requests)
 
         self.prev_update_time = int(time.time())
+        print("Time to update template request feature: " + str(int(self.prev_update_time - cur_time)) + " seconds.")
 
     def process_comment(self, comment):
         """
