@@ -147,7 +147,7 @@ class TemplateRequestFeature(Feature):
                 for request_comment_id in request_dict['requestor_comments']:
                     request_comment = self.bot.reddit.comment(id=request_comment_id)
                     request_comment.reply(
-                    "Your template request has been received by r/InsiderMemeTrading!\n\n" + \
+                    "Your template request has been received!\n\n" + \
                     "I will reply to this comment again when the template has been provided." + \
                     "You can track the request [here](" + bot_comment.permalink + ")")
 
