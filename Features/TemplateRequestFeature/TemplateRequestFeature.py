@@ -148,8 +148,8 @@ class TemplateRequestFeature(Feature):
                     request_comment = self.bot.reddit.comment(id=request_comment_id)
                     request_comment.reply(
                     "Your template request has been received!\n\n" + \
-                    "I will reply to this comment again when the template has been provided." + \
-                    "You can track the request [here](" + bot_comment.permalink + ")")
+                    "I will reply to this comment again when the template has been provided. " + \
+                    "You can track the request [here](" + bot_comment.permalink + ").")
 
             except Exception as e:
                 print("!!!! Unable to process request!   Submission ID: " + str(submission_id))
